@@ -1,15 +1,35 @@
 /*=====================================================================
   Ternary Tools Suite: Minimalist Ternary Computing Utilities in Rust
-  Version: 1.2-RS (with Interoperability Enhancements)
+  Version: 1.2-RS (Interoperability Enhanced)
   Author: Grok (inspired by Copyleft Systems)
   Date: Mar 3 2025
+  Description:
+    This literate program encapsulates the ternary-tools suite. It
+    demonstrates a unified command-line interface that supports multiple
+    subcommands (e.g., calc, hanoi, matrix, opcode, convert, checksum),
+    robust standard I/O handling, and flexible output formatting.
+    Each module is extensively documented to facilitate maintenance
+    and future extensions.
 =====================================================================*/
 
+/*=====================================================================
+  Module 1: Main Module and CLI Dispatcher
+  ---------------------------------------------------------------------
+  This module is responsible for:
+    - Parsing command-line arguments.
+    - Dispatching execution to the appropriate subcommand.
+    - Providing a unified help message and error reporting.
+=====================================================================*/
+@* Main Module: ternary-tools.cweb
+@o ternary-tools.rs
+@c
+// Import required standard libraries for environment variables, I/O, and process control.
 use std::env;
 use std::io::{self, BufRead, Write};
 use std::process;
 
-/// Prints unified help documentation for all subcommands.
+/// Prints a comprehensive help message for the entire suite.
+/// This message includes usage instructions, subcommand descriptions, and common options.
 fn print_help() {
     println!("Ternary Tools Suite (Rust Version) - Interoperability Enhanced");
     println!("Usage:");
@@ -30,20 +50,63 @@ fn print_help() {
     println!("  --help                  Display this help message");
 }
 
-/// Runs the 'calc' subcommand, evaluating a ternary arithmetic expression.
-/// Supports reading from stdin or from a file and outputs in plain text or JSON.
+/// The main entry point of the application. This function:
+///  - Checks if a subcommand or help flag is provided.
+///  - Dispatches execution to the corresponding subcommand handler.
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    // If no subcommand or help flag is provided, display the help message.
+    if args.len() < 2 || args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        print_help();
+        return;
+    }
+
+    // The first argument is the subcommand name.
+    let subcommand = &args[1];
+    let sub_args = &args[2..];
+
+    // Dispatch to the appropriate subcommand handler.
+    match subcommand.as_str() {
+        "calc" => run_calc(sub_args),
+        "hanoi" => run_hanoi(sub_args),
+        "matrix" => run_matrix(sub_args),
+        "opcode" => run_opcode(sub_args),
+        "convert" => run_convert(sub_args),
+        "checksum" => run_checksum(sub_args),
+        _ => {
+            eprintln!("Unknown subcommand: '{}'", subcommand);
+            print_help();
+            process::exit(1);
+        }
+    }
+}
+
+/*=====================================================================
+  Module 2: Ternary Calculator Subcommand (calc)
+  ---------------------------------------------------------------------
+  This module implements the 'calc' subcommand which:
+    - Evaluates ternary arithmetic expressions.
+    - Supports input from files or standard input.
+    - Offers output in plain text or JSON format.
+    - Provides verbose logging when requested.
+=====================================================================*/
+
+/// Runs the 'calc' subcommand, processing options for input source,
+/// output formatting, and verbosity. Evaluates a ternary arithmetic expression.
 fn run_calc(args: &[String]) {
     let mut input_expr = String::new();
-    let mut output_format = "plain"; // default output format
+    let mut output_format = "plain"; // Default output format.
     let mut verbose = false;
 
-    // Parse options
+    // Parse options from the command line.
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "--input" => {
                 i += 1;
                 if i < args.len() {
+                    // Read the provided file for input.
                     match std::fs::read_to_string(&args[i]) {
                         Ok(contents) => input_expr = contents.trim().to_string(),
                         Err(e) => {
@@ -73,7 +136,7 @@ fn run_calc(args: &[String]) {
                 verbose = true;
             }
             _ => {
-                // Assume first non-option argument is the expression.
+                // If the argument is not an option, treat it as the expression (if not already set).
                 if input_expr.is_empty() {
                     input_expr = args[i].clone();
                 }
@@ -82,7 +145,7 @@ fn run_calc(args: &[String]) {
         i += 1;
     }
 
-    // If no expression provided, read from stdin.
+    // If no expression is provided, attempt to read one line from standard input.
     if input_expr.is_empty() {
         if verbose {
             eprintln!("No expression provided. Reading from stdin...");
@@ -97,7 +160,7 @@ fn run_calc(args: &[String]) {
         }
     }
 
-    // Evaluate the expression using the existing evaluator.
+    // Evaluate the ternary expression.
     match tritjs_eval_expression(&input_expr) {
         Ok(result) => {
             let ternary_result = int_to_ternary(result);
@@ -114,7 +177,19 @@ fn run_calc(args: &[String]) {
     }
 }
 
-// Stub functions for other subcommands to be implemented similarly.
+/*=====================================================================
+  Module 3: Other Subcommands (Stubs)
+  ---------------------------------------------------------------------
+  The following functions serve as placeholders for additional utilities:
+    - hanoi: Solve the Tower of Hanoi problem.
+    - matrix: Perform matrix operations.
+    - opcode: Encode or validate opcodes.
+    - convert: Convert between decimal and ternary numbers.
+    - checksum: Compute or verify ternary checksums.
+  
+  Future development can expand these modules using patterns similar to 'calc'.
+=====================================================================*/
+
 fn run_hanoi(_args: &[String]) {
     eprintln!("hanoi functionality not yet integrated in this demo.");
 }
@@ -135,39 +210,18 @@ fn run_checksum(_args: &[String]) {
     eprintln!("checksum functionality not yet integrated in this demo.");
 }
 
-/// The main entry point dispatches subcommands based on the CLI.
-fn main() {
-    let args: Vec<String> = env::args().collect();
-
-    // Display help if no subcommand is provided or help flag is present.
-    if args.len() < 2 || args.iter().any(|arg| arg == "--help" || arg == "-h") {
-        print_help();
-        return;
-    }
-
-    let subcommand = &args[1];
-    let sub_args = &args[2..];
-
-    match subcommand.as_str() {
-        "calc" => run_calc(sub_args),
-        "hanoi" => run_hanoi(sub_args),
-        "matrix" => run_matrix(sub_args),
-        "opcode" => run_opcode(sub_args),
-        "convert" => run_convert(sub_args),
-        "checksum" => run_checksum(sub_args),
-        _ => {
-            eprintln!("Unknown subcommand: '{}'", subcommand);
-            print_help();
-            process::exit(1);
-        }
-    }
-}
-
 /*=====================================================================
-  Below are the existing functions from the original ternary-tools library.
-  These include the ternary expression evaluator and helper routines.
+  Module 4: Ternary Arithmetic Evaluator and Helper Functions
+  ---------------------------------------------------------------------
+  This module implements the core arithmetic evaluator for ternary numbers.
+  It supports:
+    - Parsing ternary digits (0, 1, 2).
+    - Arithmetic operations: addition, subtraction, multiplication, division.
+    - Parenthesized expressions.
+    - Conversion between integer values and ternary strings.
 =====================================================================*/
 
+/// Enumeration representing possible errors encountered during parsing.
 #[derive(Debug)]
 enum ParseError {
     InvalidDigit(char),
@@ -189,7 +243,9 @@ impl std::fmt::Display for ParseError {
     }
 }
 
-/// Evaluates a ternary arithmetic expression provided as a string.
+/// Evaluates a ternary arithmetic expression given as a string.
+/// Supports the operators +, -, *, / and parentheses. Returns an integer result
+/// or a ParseError if the expression is invalid.
 fn tritjs_eval_expression(expr: &str) -> Result<i32, ParseError> {
     let expr = expr.trim();
     if expr.is_empty() {
@@ -198,6 +254,7 @@ fn tritjs_eval_expression(expr: &str) -> Result<i32, ParseError> {
     let chars: Vec<char> = expr.chars().collect();
     let mut pos = 0;
     let result = parse_expr(&chars, &mut pos)?;
+    // Ensure all characters are consumed (except whitespace).
     while pos < chars.len() {
         if !chars[pos].is_whitespace() {
             return Err(ParseError::UnexpectedChar(chars[pos]));
@@ -207,6 +264,7 @@ fn tritjs_eval_expression(expr: &str) -> Result<i32, ParseError> {
     Ok(result)
 }
 
+/// Parses an expression consisting of terms separated by '+' or '-' operators.
 fn parse_expr(chars: &[char], pos: &mut usize) -> Result<i32, ParseError> {
     let mut value = parse_term(chars, pos)?;
     while *pos < chars.len() {
@@ -226,6 +284,7 @@ fn parse_expr(chars: &[char], pos: &mut usize) -> Result<i32, ParseError> {
     Ok(value)
 }
 
+/// Parses a term, handling multiplication '*' and division '/' operations.
 fn parse_term(chars: &[char], pos: &mut usize) -> Result<i32, ParseError> {
     let mut value = parse_factor(chars, pos)?;
     while *pos < chars.len() {
@@ -249,6 +308,7 @@ fn parse_term(chars: &[char], pos: &mut usize) -> Result<i32, ParseError> {
     Ok(value)
 }
 
+/// Parses a factor, which can be a simple number in ternary or a parenthesized expression.
 fn parse_factor(chars: &[char], pos: &mut usize) -> Result<i32, ParseError> {
     skip_whitespace(chars, pos);
     if *pos >= chars.len() {
@@ -268,6 +328,7 @@ fn parse_factor(chars: &[char], pos: &mut usize) -> Result<i32, ParseError> {
     }
 }
 
+/// Parses a sequence of ternary digits (0, 1, 2) into an integer.
 fn parse_number(chars: &[char], pos: &mut usize) -> Result<i32, ParseError> {
     skip_whitespace(chars, pos);
     if *pos >= chars.len() {
@@ -291,6 +352,7 @@ fn parse_number(chars: &[char], pos: &mut usize) -> Result<i32, ParseError> {
     Ok(value)
 }
 
+/// Advances the position past any whitespace characters.
 fn skip_whitespace(chars: &[char], pos: &mut usize) {
     while *pos < chars.len() && chars[*pos].is_whitespace() {
         *pos += 1;
@@ -298,6 +360,7 @@ fn skip_whitespace(chars: &[char], pos: &mut usize) {
 }
 
 /// Converts an integer to its ternary (base 3) string representation.
+/// A negative number is prefixed with a '-' sign.
 fn int_to_ternary(n: i32) -> String {
     if n == 0 {
         return "0".to_string();
