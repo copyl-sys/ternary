@@ -1,52 +1,17 @@
-@* T81 Ternary Data Types (Complete and Optimized).
+@* T81 Ternary Data Types (Complete, Optimized, and Multi-Language Ready).
 This document presents a fully implemented ternary number system in base-81, submitted to CISA on March 04, 2025.
-It supports three data types: arbitrary-precision integers (T81BigInt), exact rational numbers (T81Fraction),
+It includes three data types: arbitrary-precision integers (T81BigInt), exact rational numbers (T81Fraction),
 and floating-point numbers (T81Float), with all arithmetic operations (addition, subtraction, multiplication,
-division). Optimized for competition with binary systems (e.g., GMP, MPFR), it includes binary interoperability,
-SIMD (AVX2), multi-threading, fraction simplification, and cross-platform portability. Written in CWEB, it is
-comprehensively commented and leverages CPU flags (e.g., -mavx2, -pthread) for AI-relevant parallelism and
-vectorization. 
+division). Optimized to compete with binary systems (e.g., GMP, MPFR), it features SIMD (AVX2), multi-threading,
+fraction simplification, binary interoperability, and cross-platform portability (POSIX/Windows). A stable C
+interface is provided for bindings in Python (ctypes), Rust (bindgen), and Java (JNA), enhancing accessibility.
+Written in CWEB, it is comprehensively commented and leverages CPU flags (-mavx2, -pthread) for AI workloads.
 
-Key Features and Optimizations
-Completeness: 
-All arithmetic operations (add, subtract, multiply, divide) are fully implemented for T81BigInt, T81Fraction, and T81Float. No stubs or undefined functions.
-
-Binary Interoperability: 
-t81bigint_from_binary enables conversion from binary strings, ensuring compatibility with binary systems.
-
-Performance:
-SIMD: Uses AVX2 in t81bigint_add for small sizes (e.g., <32 digits) with vectorized addition.
-
-Multi-Threading: 
-Employs pthread for large operations, splitting work across THREAD_COUNT (4) threads.
-
-Fraction Simplification: 
-t81fraction_simplify uses GCD to reduce fractions, improving efficiency.
-
-Cross-Platform: 
-Supports POSIX (mmap) and Windows (CreateFileMapping) for memory management.
-
-AI-Relevant CPU Flags: 
-Designed for compilation with -mavx2 -pthread to leverage vectorization and parallelism, critical for AI workloads.
-
-Documentation: 
-Comprehensive CWEB comments explain functionality, optimizations, and expected outputs.
-
-Compilation Instructions for CISA
-Command: gcc -O3 -mavx2 -pthread -o t81 t81.c (after ctangle t81.cweb).
-
-Flags: -mavx2 enables SIMD, -pthread enables multi-threading, -O3 maximizes optimization.
-
-Output: Produces an executable demonstrating all operations with test cases.
-
-This .cweb file is ready for submission to CISA on March 04, 2025, with a complete, optimized, and well-documented ternary arithmetic system competitive with binary counterparts.
-
-
-The base-81 system (3^4, digits 0-80) balances ternary principles with computational efficiency, enhanced
-by modern hardware optimizations.
+The base-81 system (3^4, digits 0-80) balances ternary principles with computational efficiency, augmented for
+modern hardware and multi-language ecosystems.
 
 @*1 Header Files and Common Definitions.
-We include libraries for I/O, memory, threading, SIMD, and platform-specific features.
+We include libraries for I/O, memory, threading, SIMD, and platform-specific features, plus the C interface.
 @c
 #include <stdio.h>      /* Input/output */
 #include <stdlib.h>     /* Memory allocation */
@@ -62,13 +27,8 @@ We include libraries for I/O, memory, threading, SIMD, and platform-specific fea
 #include <pthread.h>    /* Multi-threading */
 #include <immintrin.h>  /* AVX2 for SIMD */
 
-typedef int TritError;  /* Error code type */
-#define BASE_81 81      /* Base of the ternary system (3^4) */
-#define MAX_PATH 260    /* Max path length (Windows-compatible) */
-#define T81_MMAP_THRESHOLD (2 * 1024 * 1024) /* 2 MB threshold for mapping */
-#define THREAD_COUNT 4  /* Number of threads for parallel ops */
-
-/* Error codes */
+/* C Interface for FFI bindings (t81.h equivalent) */
+typedef int TritError;
 #define TRIT_OK 0
 #define TRIT_MEM_FAIL 1
 #define TRIT_INVALID_INPUT 2
@@ -76,23 +36,61 @@ typedef int TritError;  /* Error code type */
 #define TRIT_OVERFLOW 4
 #define TRIT_MAP_FAIL 8
 
-/* Global resource tracking */
+typedef void* T81BigIntHandle;
+typedef void* T81FractionHandle;
+typedef void* T81FloatHandle;
+
+/* Forward declarations for binding functions */
+T81BigIntHandle t81bigint_new(int value);
+T81BigIntHandle t81bigint_from_string(const char* str);
+T81BigIntHandle t81bigint_from_binary(const char* bin_str);
+void t81bigint_free(T81BigIntHandle h);
+TritError t81bigint_to_string(T81BigIntHandle h, char** result);
+TritError t81bigint_add(T81BigIntHandle a, T81BigIntHandle b, T81BigIntHandle* result);
+TritError t81bigint_subtract(T81BigIntHandle a, T81BigIntHandle b, T81BigIntHandle* result);
+TritError t81bigint_multiply(T81BigIntHandle a, T81BigIntHandle b, T81BigIntHandle* result);
+TritError t81bigint_divide(T81BigIntHandle a, T81BigIntHandle b, T81BigIntHandle* quotient, T81BigIntHandle* remainder);
+
+T81FractionHandle t81fraction_new(const char* num_str, const char* denom_str);
+void t81fraction_free(T81FractionHandle h);
+TritError t81fraction_get_num(T81FractionHandle h, T81BigIntHandle* num);
+TritError t81fraction_get_den(T81FractionHandle h, T81BigIntHandle* den);
+TritError t81fraction_add(T81FractionHandle a, T81FractionHandle b, T81FractionHandle* result);
+TritError t81fraction_subtract(T81FractionHandle a, T81FractionHandle b, T81FractionHandle* result);
+TritError t81fraction_multiply(T81FractionHandle a, T81FractionHandle b, T81FractionHandle* result);
+TritError t81fraction_divide(T81FractionHandle a, T81FractionHandle b, T81FractionHandle* result);
+
+T81FloatHandle t81float_new(const char* mantissa_str, int exponent);
+void t81float_free(T81FloatHandle h);
+TritError t81float_get_mantissa(T81FloatHandle h, T81BigIntHandle* mantissa);
+TritError t81float_get_exponent(T81FloatHandle h, int* exponent);
+TritError t81float_add(T81FloatHandle a, T81FloatHandle b, T81FloatHandle* result);
+TritError t81float_subtract(T81FloatHandle a, T81FloatHandle b, T81FloatHandle* result);
+TritError t81float_multiply(T81FloatHandle a, T81FloatHandle b, T81FloatHandle* result);
+TritError t81float_divide(T81FloatHandle a, T81FloatHandle b, T81FloatHandle* result);
+
+/* Internal definitions */
+#define BASE_81 81
+#define MAX_PATH 260
+#define T81_MMAP_THRESHOLD (2 * 1024 * 1024)
+#define THREAD_COUNT 4
+
 static long total_mapped_bytes = 0;
 static int operation_steps = 0;
 
 @*2 T81BigInt: Arbitrary-Precision Ternary Integers.
-Represents integers in base-81 with full arithmetic and binary conversion.
+Internal struct and full arithmetic operations, exposed via the C interface.
 @c
 typedef struct {
-    int sign;                /* 0 = positive, 1 = negative */
-    unsigned char *digits;   /* Base-81 digits (0-80), little-endian */
-    size_t len;              /* Number of digits */
-    int is_mapped;           /* 1 if mapped, 0 if heap */
-    int fd;                  /* File descriptor (-1 if unused) */
-    char tmp_path[MAX_PATH]; /* Temp file path */
+    int sign;
+    unsigned char *digits;
+    size_t len;
+    int is_mapped;
+    int fd;
+    char tmp_path[MAX_PATH];
 } T81BigInt;
 
-T81BigInt* new_t81bigint(int value) {
+static T81BigInt* new_t81bigint(int value) {
     T81BigInt* res = (T81BigInt*)calloc(1, sizeof(T81BigInt));
     if (!res) return NULL;
     res->sign = (value < 0) ? 1 : 0;
@@ -103,7 +101,7 @@ T81BigInt* new_t81bigint(int value) {
     return res;
 }
 
-TritError allocate_digits(T81BigInt *x, size_t lengthNeeded) {
+static TritError allocate_digits(T81BigInt *x, size_t lengthNeeded) {
     size_t bytesNeeded = (lengthNeeded == 0 ? 1 : lengthNeeded);
     x->len = lengthNeeded;
     x->is_mapped = 0;
@@ -136,7 +134,7 @@ TritError allocate_digits(T81BigInt *x, size_t lengthNeeded) {
     return TRIT_OK;
 }
 
-void t81bigint_free(T81BigInt* x) {
+static void free_t81bigint(T81BigInt* x) {
     if (!x) return;
     if (x->is_mapped && x->digits) {
         size_t bytes = (x->len == 0 ? 1 : x->len);
@@ -154,7 +152,7 @@ void t81bigint_free(T81BigInt* x) {
     free(x);
 }
 
-T81BigInt* copy_t81bigint(T81BigInt *x) {
+static T81BigInt* copy_t81bigint(T81BigInt *x) {
     T81BigInt* copy = (T81BigInt*)calloc(1, sizeof(T81BigInt));
     if (!copy) return NULL;
     if (allocate_digits(copy, x->len) != TRIT_OK) { free(copy); return NULL; }
@@ -164,7 +162,7 @@ T81BigInt* copy_t81bigint(T81BigInt *x) {
     return copy;
 }
 
-int t81bigint_compare(T81BigInt *A, T81BigInt *B) {
+static int t81bigint_compare(T81BigInt *A, T81BigInt *B) {
     if (A->sign != B->sign) return (A->sign ? -1 : 1);
     if (A->len > B->len) return (A->sign ? -1 : 1);
     if (A->len < B->len) return (A->sign ? 1 : -1);
@@ -175,7 +173,7 @@ int t81bigint_compare(T81BigInt *A, T81BigInt *B) {
     return 0;
 }
 
-TritError parse_trit_string(const char *str, T81BigInt **result) {
+static TritError parse_trit_string(const char *str, T81BigInt **result) {
     if (!str || !result) return TRIT_INVALID_INPUT;
     int sign = (str[0] == '-') ? 1 : 0;
     size_t start = sign ? 1 : 0;
@@ -189,7 +187,7 @@ TritError parse_trit_string(const char *str, T81BigInt **result) {
     size_t digit_idx = 0;
     for (size_t i = str_len - 1; i >= start; i--) {
         int value = str[i] - '0';
-        if (value > 80) { t81bigint_free(*result); return TRIT_INVALID_INPUT; }
+        if (value > 80) { free_t81bigint(*result); return TRIT_INVALID_INPUT; }
         (*result)->digits[digit_idx++] = (unsigned char)value;
     }
     (*result)->len = digit_idx;
@@ -198,7 +196,7 @@ TritError parse_trit_string(const char *str, T81BigInt **result) {
     return TRIT_OK;
 }
 
-TritError t81bigint_to_trit_string(T81BigInt *x, char **result) {
+static TritError t81bigint_to_trit_string(T81BigInt *x, char **result) {
     if (!x || !result) return TRIT_INVALID_INPUT;
     size_t buf_size = x->len * 3 + 2;
     *result = (char*)malloc(buf_size);
@@ -217,31 +215,31 @@ TritError t81bigint_to_trit_string(T81BigInt *x, char **result) {
     return TRIT_OK;
 }
 
-TritError t81bigint_from_binary(const char *bin_str, T81BigInt **result) {
+static TritError t81bigint_from_binary(const char *bin_str, T81BigInt **result) {
     if (!bin_str || !result) return TRIT_INVALID_INPUT;
     size_t len = strlen(bin_str);
     *result = new_t81bigint(0);
     if (!*result) return TRIT_MEM_FAIL;
     for (size_t i = 0; i < len; i++) {
         if (bin_str[len - 1 - i] != '0' && bin_str[len - 1 - i] != '1') {
-            t81bigint_free(*result); return TRIT_INVALID_INPUT;
+            free_t81bigint(*result); return TRIT_INVALID_INPUT;
         }
         if (bin_str[len - 1 - i] == '1') {
             T81BigInt *temp, *two = new_t81bigint(2);
             TritError err = t81bigint_power(two, i, &temp);
-            if (err != TRIT_OK) { t81bigint_free(two); t81bigint_free(*result); return err; }
+            if (err != TRIT_OK) { free_t81bigint(two); free_t81bigint(*result); return err; }
             T81BigInt *sum;
             err = t81bigint_add(*result, temp, &sum);
-            if (err != TRIT_OK) { t81bigint_free(temp); t81bigint_free(two); t81bigint_free(*result); return err; }
-            t81bigint_free(*result); *result = sum;
-            t81bigint_free(temp); t81bigint_free(two);
+            if (err != TRIT_OK) { free_t81bigint(temp); free_t81bigint(two); free_t81bigint(*result); return err; }
+            free_t81bigint(*result); *result = sum;
+            free_t81bigint(temp); free_t81bigint(two);
         }
     }
     return TRIT_OK;
 }
 
 typedef struct { T81BigInt *A, *B, *result; size_t start, end; int op; } ArithArgs;
-void* add_sub_thread(void* arg) {
+static void* add_sub_thread(void* arg) {
     ArithArgs* args = (ArithArgs*)arg;
     int carry = 0;
     for (size_t i = args->start; i < args->end || carry; i++) {
@@ -256,7 +254,7 @@ void* add_sub_thread(void* arg) {
     return NULL;
 }
 
-TritError t81bigint_add(T81BigInt *A, T81BigInt *B, T81BigInt **result) {
+static TritError t81bigint_add(T81BigInt *A, T81BigInt *B, T81BigInt **result) {
     size_t max_len = (A->len > B->len) ? A->len : B->len;
     *result = (T81BigInt*)calloc(1, sizeof(T81BigInt));
     if (!*result) return TRIT_MEM_FAIL;
@@ -291,19 +289,19 @@ TritError t81bigint_add(T81BigInt *A, T81BigInt *B, T81BigInt **result) {
         if (cmp >= 0) {
             TritError err = t81bigint_subtract(absA, absB, result);
             (*result)->sign = A->sign;
-            t81bigint_free(absA); t81bigint_free(absB);
+            free_t81bigint(absA); free_t81bigint(absB);
             return err;
         } else {
             TritError err = t81bigint_subtract(absB, absA, result);
             (*result)->sign = B->sign;
-            t81bigint_free(absA); t81bigint_free(absB);
+            free_t81bigint(absA); free_t81bigint(absB);
             return err;
         }
     }
     return TRIT_OK;
 }
 
-TritError t81bigint_subtract(T81BigInt *A, T81BigInt *B, T81BigInt **result) {
+static TritError t81bigint_subtract(T81BigInt *A, T81BigInt *B, T81BigInt **result) {
     if (t81bigint_compare(A, B) < 0 && A->sign == B->sign) {
         TritError err = t81bigint_subtract(B, A, result);
         (*result)->sign = !A->sign;
@@ -328,7 +326,7 @@ TritError t81bigint_subtract(T81BigInt *A, T81BigInt *B, T81BigInt **result) {
     return TRIT_OK;
 }
 
-TritError t81bigint_multiply(T81BigInt *A, T81BigInt *B, T81BigInt **result) {
+static TritError t81bigint_multiply(T81BigInt *A, T81BigInt *B, T81BigInt **result) {
     *result = (T81BigInt*)calloc(1, sizeof(T81BigInt));
     if (!*result) return TRIT_MEM_FAIL;
     if (allocate_digits(*result, A->len + B->len) != TRIT_OK) { free(*result); return TRIT_MEM_FAIL; }
@@ -348,7 +346,7 @@ TritError t81bigint_multiply(T81BigInt *A, T81BigInt *B, T81BigInt **result) {
     return TRIT_OK;
 }
 
-TritError t81bigint_power(T81BigInt *base, int exp, T81BigInt **result) {
+static TritError t81bigint_power(T81BigInt *base, int exp, T81BigInt **result) {
     if (exp < 0) return TRIT_INVALID_INPUT;
     *result = new_t81bigint(1);
     if (!*result) return TRIT_MEM_FAIL;
@@ -357,20 +355,20 @@ TritError t81bigint_power(T81BigInt *base, int exp, T81BigInt **result) {
         if (exp & 1) {
             T81BigInt *new_res;
             TritError err = t81bigint_multiply(*result, temp, &new_res);
-            if (err != TRIT_OK) { t81bigint_free(temp); t81bigint_free(*result); return err; }
-            t81bigint_free(*result); *result = new_res;
+            if (err != TRIT_OK) { free_t81bigint(temp); free_t81bigint(*result); return err; }
+            free_t81bigint(*result); *result = new_res;
         }
         T81BigInt *new_temp;
         TritError err = t81bigint_multiply(temp, temp, &new_temp);
-        if (err != TRIT_OK) { t81bigint_free(temp); t81bigint_free(*result); return err; }
-        t81bigint_free(temp); temp = new_temp;
+        if (err != TRIT_OK) { free_t81bigint(temp); free_t81bigint(*result); return err; }
+        free_t81bigint(temp); temp = new_temp;
         exp >>= 1;
     }
-    t81bigint_free(temp);
+    free_t81bigint(temp);
     return TRIT_OK;
 }
 
-TritError t81bigint_divide(T81BigInt *A, T81BigInt *B, T81BigInt **quotient, T81BigInt **remainder) {
+static TritError t81bigint_divide(T81BigInt *A, T81BigInt *B, T81BigInt **quotient, T81BigInt **remainder) {
     if (B->len == 1 && B->digits[0] == 0) return TRIT_DIV_ZERO;
     if (t81bigint_compare(A, B) < 0) {
         *quotient = new_t81bigint(0);
@@ -390,140 +388,197 @@ TritError t81bigint_divide(T81BigInt *A, T81BigInt *B, T81BigInt **quotient, T81
         while (t81bigint_compare(*remainder, d) >= 0) {
             T81BigInt *temp;
             if (t81bigint_add(d, d, &temp) != TRIT_OK) return TRIT_MEM_FAIL;
-            if (t81bigint_compare(temp, *remainder) > 0) { t81bigint_free(temp); break; }
-            t81bigint_free(d); d = temp;
+            if (t81bigint_compare(temp, *remainder) > 0) { free_t81bigint(temp); break; }
+            free_t81bigint(d); d = temp;
             if (t81bigint_add(q_step, q_step, &temp) != TRIT_OK) return TRIT_MEM_FAIL;
-            t81bigint_free(q_step); q_step = temp;
+            free_t81bigint(q_step); q_step = temp;
         }
         T81BigInt *temp;
         if (t81bigint_subtract(*remainder, d, &temp) != TRIT_OK) return TRIT_MEM_FAIL;
-        t81bigint_free(*remainder); *remainder = temp;
+        free_t81bigint(*remainder); *remainder = temp;
         if (t81bigint_add(*quotient, q_step, &temp) != TRIT_OK) return TRIT_MEM_FAIL;
-        t81bigint_free(*quotient); *quotient = temp;
-        t81bigint_free(d); t81bigint_free(q_step);
+        free_t81bigint(*quotient); *quotient = temp;
+        free_t81bigint(d); free_t81bigint(q_step);
     }
-    t81bigint_free(absA); t81bigint_free(absB);
+    free_t81bigint(absA); free_t81bigint(absB);
     return TRIT_OK;
 }
 
+/* C Interface Implementations for T81BigInt */
+T81BigIntHandle t81bigint_new(int value) { return (T81BigIntHandle)new_t81bigint(value); }
+T81BigIntHandle t81bigint_from_string(const char* str) {
+    T81BigInt* res;
+    if (parse_trit_string(str, &res) != TRIT_OK) return NULL;
+    return (T81BigIntHandle)res;
+}
+T81BigIntHandle t81bigint_from_binary(const char* bin_str) {
+    T81BigInt* res;
+    if (t81bigint_from_binary(bin_str, &res) != TRIT_OK) return NULL;
+    return (T81BigIntHandle)res;
+}
+void t81bigint_free(T81BigIntHandle h) { free_t81bigint((T81BigInt*)h); }
+TritError t81bigint_to_string(T81BigIntHandle h, char** result) {
+    return t81bigint_to_trit_string((T81BigInt*)h, result);
+}
+TritError t81bigint_add(T81BigIntHandle a, T81BigIntHandle b, T81BigIntHandle* result) {
+    return t81bigint_add((T81BigInt*)a, (T81BigInt*)b, (T81BigInt**)result);
+}
+TritError t81bigint_subtract(T81BigIntHandle a, T81BigIntHandle b, T81BigIntHandle* result) {
+    return t81bigint_subtract((T81BigInt*)a, (T81BigInt*)b, (T81BigInt**)result);
+}
+TritError t81bigint_multiply(T81BigIntHandle a, T81BigIntHandle b, T81BigIntHandle* result) {
+    return t81bigint_multiply((T81BigInt*)a, (T81BigInt*)b, (T81BigInt**)result);
+}
+TritError t81bigint_divide(T81BigIntHandle a, T81BigIntHandle b, T81BigIntHandle* quotient, T81BigIntHandle* remainder) {
+    return t81bigint_divide((T81BigInt*)a, (T81BigInt*)b, (T81BigInt**)quotient, (T81BigInt**)remainder);
+}
+
 @*3 T81Fraction: Exact Ternary Rational Numbers.
-Represents fractions with automatic simplification.
+Internal struct and arithmetic with simplification, exposed via the C interface.
 @c
 typedef struct {
     T81BigInt *numerator;
     T81BigInt *denominator;
 } T81Fraction;
 
-T81Fraction* new_t81fraction(const char *num_str, const char *denom_str) {
+static T81Fraction* new_t81fraction(const char *num_str, const char *denom_str) {
     T81Fraction* result = (T81Fraction*)calloc(1, sizeof(T81Fraction));
     if (!result) return NULL;
     TritError err = parse_trit_string(num_str, &result->numerator);
     if (err != TRIT_OK) { free(result); return NULL; }
     err = parse_trit_string(denom_str, &result->denominator);
-    if (err != TRIT_OK) { t81bigint_free(result->numerator); free(result); return NULL; }
+    if (err != TRIT_OK) { free_t81bigint(result->numerator); free(result); return NULL; }
     if (result->denominator->len == 1 && result->denominator->digits[0] == 0) {
-        t81bigint_free(result->numerator); t81bigint_free(result->denominator); free(result);
+        free_t81bigint(result->numerator); free_t81bigint(result->denominator); free(result);
         return NULL;
     }
     err = t81fraction_simplify(result);
-    if (err != TRIT_OK) { t81fraction_free(result); free(result); return NULL; }
+    if (err != TRIT_OK) { free_t81fraction(result); free(result); return NULL; }
     return result;
 }
 
-void t81fraction_free(T81Fraction *x) {
+static void free_t81fraction(T81Fraction *x) {
     if (!x) return;
-    t81bigint_free(x->numerator);
-    t81bigint_free(x->denominator);
+    free_t81bigint(x->numerator);
+    free_t81bigint(x->denominator);
     free(x);
 }
 
-TritError t81_gcd_big(T81BigInt *A, T81BigInt *B, T81BigInt **result) {
+static TritError t81_gcd_big(T81BigInt *A, T81BigInt *B, T81BigInt **result) {
     T81BigInt *a = copy_t81bigint(A), *b = copy_t81bigint(B), *rem;
     a->sign = 0; b->sign = 0;
     while (b->len > 1 || b->digits[0] != 0) {
         TritError err = t81bigint_divide(a, b, &a, &rem);
-        if (err != TRIT_OK) { t81bigint_free(a); t81bigint_free(b); return err; }
-        t81bigint_free(a); a = b; b = rem;
+        if (err != TRIT_OK) { free_t81bigint(a); free_t81bigint(b); return err; }
+        free_t81bigint(a); a = b; b = rem;
     }
     *result = a;
-    t81bigint_free(b);
+    free_t81bigint(b);
     return TRIT_OK;
 }
 
-TritError t81fraction_simplify(T81Fraction *f) {
+static TritError t81fraction_simplify(T81Fraction *f) {
     T81BigInt *gcd;
     TritError err = t81_gcd_big(f->numerator, f->denominator, &gcd);
     if (err != TRIT_OK) return err;
     T81BigInt *temp;
     err = t81bigint_divide(f->numerator, gcd, &temp, NULL);
-    if (err != TRIT_OK) { t81bigint_free(gcd); return err; }
-    t81bigint_free(f->numerator); f->numerator = temp;
+    if (err != TRIT_OK) { free_t81bigint(gcd); return err; }
+    free_t81bigint(f->numerator); f->numerator = temp;
     err = t81bigint_divide(f->denominator, gcd, &temp, NULL);
-    if (err != TRIT_OK) { t81bigint_free(gcd); return err; }
-    t81bigint_free(f->denominator); f->denominator = temp;
-    t81bigint_free(gcd);
+    if (err != TRIT_OK) { free_t81bigint(gcd); return err; }
+    free_t81bigint(f->denominator); f->denominator = temp;
+    free_t81bigint(gcd);
     return TRIT_OK;
 }
 
-TritError t81fraction_add(T81Fraction *A, T81Fraction *B, T81Fraction **result) {
+static TritError t81fraction_add(T81Fraction *A, T81Fraction *B, T81Fraction **result) {
     *result = (T81Fraction*)calloc(1, sizeof(T81Fraction));
     if (!*result) return TRIT_MEM_FAIL;
     T81BigInt *ad, *bc, *numer, *denom;
     TritError err = t81bigint_multiply(A->numerator, B->denominator, &ad);
     if (err != TRIT_OK) { free(*result); return err; }
     err = t81bigint_multiply(B->numerator, A->denominator, &bc);
-    if (err != TRIT_OK) { t81bigint_free(ad); free(*result); return err; }
+    if (err != TRIT_OK) { free_t81bigint(ad); free(*result); return err; }
     err = t81bigint_add(ad, bc, &numer);
-    if (err != TRIT_OK) { t81bigint_free(ad); t81bigint_free(bc); free(*result); return err; }
+    if (err != TRIT_OK) { free_t81bigint(ad); free_t81bigint(bc); free(*result); return err; }
     err = t81bigint_multiply(A->denominator, B->denominator, &denom);
-    if (err != TRIT_OK) { t81bigint_free(ad); t81bigint_free(bc); t81bigint_free(numer); free(*result); return err; }
+    if (err != TRIT_OK) { free_t81bigint(ad); free_t81bigint(bc); free_t81bigint(numer); free(*result); return err; }
     (*result)->numerator = numer;
     (*result)->denominator = denom;
-    t81bigint_free(ad); t81bigint_free(bc);
+    free_t81bigint(ad); free_t81bigint(bc);
     return t81fraction_simplify(*result);
 }
 
-TritError t81fraction_subtract(T81Fraction *A, T81Fraction *B, T81Fraction **result) {
+static TritError t81fraction_subtract(T81Fraction *A, T81Fraction *B, T81Fraction **result) {
     *result = (T81Fraction*)calloc(1, sizeof(T81Fraction));
     if (!*result) return TRIT_MEM_FAIL;
     T81BigInt *ad, *bc, *numer, *denom;
     TritError err = t81bigint_multiply(A->numerator, B->denominator, &ad);
     if (err != TRIT_OK) { free(*result); return err; }
     err = t81bigint_multiply(B->numerator, A->denominator, &bc);
-    if (err != TRIT_OK) { t81bigint_free(ad); free(*result); return err; }
+    if (err != TRIT_OK) { free_t81bigint(ad); free(*result); return err; }
     err = t81bigint_subtract(ad, bc, &numer);
-    if (err != TRIT_OK) { t81bigint_free(ad); t81bigint_free(bc); free(*result); return err; }
+    if (err != TRIT_OK) { free_t81bigint(ad); free_t81bigint(bc); free(*result); return err; }
     err = t81bigint_multiply(A->denominator, B->denominator, &denom);
-    if (err != TRIT_OK) { t81bigint_free(ad); t81bigint_free(bc); t81bigint_free(numer); free(*result); return err; }
+    if (err != TRIT_OK) { free_t81bigint(ad); free_t81bigint(bc); free_t81bigint(numer); free(*result); return err; }
     (*result)->numerator = numer;
     (*result)->denominator = denom;
-    t81bigint_free(ad); t81bigint_free(bc);
+    free_t81bigint(ad); free_t81bigint(bc);
     return t81fraction_simplify(*result);
 }
 
-TritError t81fraction_multiply(T81Fraction *A, T81Fraction *B, T81Fraction **result) {
+static TritError t81fraction_multiply(T81Fraction *A, T81Fraction *B, T81Fraction **result) {
     *result = (T81Fraction*)calloc(1, sizeof(T81Fraction));
     if (!*result) return TRIT_MEM_FAIL;
     TritError err = t81bigint_multiply(A->numerator, B->numerator, &(*result)->numerator);
     if (err != TRIT_OK) { free(*result); return err; }
     err = t81bigint_multiply(A->denominator, B->denominator, &(*result)->denominator);
-    if (err != TRIT_OK) { t81bigint_free((*result)->numerator); free(*result); return err; }
+    if (err != TRIT_OK) { free_t81bigint((*result)->numerator); free(*result); return err; }
     return t81fraction_simplify(*result);
 }
 
-TritError t81fraction_divide(T81Fraction *A, T81Fraction *B, T81Fraction **result) {
+static TritError t81fraction_divide(T81Fraction *A, T81Fraction *B, T81Fraction **result) {
     if (B->numerator->len == 1 && B->numerator->digits[0] == 0) return TRIT_DIV_ZERO;
     *result = (T81Fraction*)calloc(1, sizeof(T81Fraction));
     if (!*result) return TRIT_MEM_FAIL;
     TritError err = t81bigint_multiply(A->numerator, B->denominator, &(*result)->numerator);
     if (err != TRIT_OK) { free(*result); return err; }
     err = t81bigint_multiply(A->denominator, B->numerator, &(*result)->denominator);
-    if (err != TRIT_OK) { t81bigint_free((*result)->numerator); free(*result); return err; }
+    if (err != TRIT_OK) { free_t81bigint((*result)->numerator); free(*result); return err; }
     return t81fraction_simplify(*result);
 }
 
+/* C Interface Implementations for T81Fraction */
+T81FractionHandle t81fraction_new(const char* num_str, const char* denom_str) {
+    return (T81FractionHandle)new_t81fraction(num_str, denom_str);
+}
+void t81fraction_free(T81FractionHandle h) { free_t81fraction((T81Fraction*)h); }
+TritError t81fraction_get_num(T81FractionHandle h, T81BigIntHandle* num) {
+    T81Fraction* f = (T81Fraction*)h;
+    *num = (T81BigIntHandle)copy_t81bigint(f->numerator);
+    return (*num) ? TRIT_OK : TRIT_MEM_FAIL;
+}
+TritError t81fraction_get_den(T81FractionHandle h, T81BigIntHandle* den) {
+    T81Fraction* f = (T81Fraction*)h;
+    *den = (T81BigIntHandle)copy_t81bigint(f->denominator);
+    return (*den) ? TRIT_OK : TRIT_MEM_FAIL;
+}
+TritError t81fraction_add(T81FractionHandle a, T81FractionHandle b, T81FractionHandle* result) {
+    return t81fraction_add((T81Fraction*)a, (T81Fraction*)b, (T81Fraction**)result);
+}
+TritError t81fraction_subtract(T81FractionHandle a, T81FractionHandle b, T81FractionHandle* result) {
+    return t81fraction_subtract((T81Fraction*)a, (T81Fraction*)b, (T81Fraction**)result);
+}
+TritError t81fraction_multiply(T81FractionHandle a, T81FractionHandle b, T81FractionHandle* result) {
+    return t81fraction_multiply((T81Fraction*)a, (T81Fraction*)b, (T81Fraction**)result);
+}
+TritError t81fraction_divide(T81FractionHandle a, T81FractionHandle b, T81FractionHandle* result) {
+    return t81fraction_divide((T81Fraction*)a, (T81Fraction*)b, (T81Fraction**)result);
+}
+
 @*4 T81Float: Floating-Point Ternary Numbers.
-Represents floating-point numbers with mantissa and exponent.
+Internal struct and arithmetic with normalization, exposed via the C interface.
 @c
 typedef struct {
     T81BigInt *mantissa;
@@ -531,7 +586,7 @@ typedef struct {
     int sign;
 } T81Float;
 
-T81Float* new_t81float(const char *mantissa_str, int exponent) {
+static T81Float* new_t81float(const char *mantissa_str, int exponent) {
     T81Float* result = (T81Float*)calloc(1, sizeof(T81Float));
     if (!result) return NULL;
     TritError err = parse_trit_string(mantissa_str, &result->mantissa);
@@ -539,17 +594,17 @@ T81Float* new_t81float(const char *mantissa_str, int exponent) {
     result->exponent = exponent;
     result->sign = (mantissa_str[0] == '-') ? 1 : 0;
     err = t81float_normalize(result);
-    if (err != TRIT_OK) { t81float_free(result); free(result); return NULL; }
+    if (err != TRIT_OK) { free_t81float(result); free(result); return NULL; }
     return result;
 }
 
-void t81float_free(T81Float *x) {
+static void free_t81float(T81Float *x) {
     if (!x) return;
-    t81bigint_free(x->mantissa);
+    free_t81bigint(x->mantissa);
     free(x);
 }
 
-TritError t81float_normalize(T81Float *f) {
+static TritError t81float_normalize(T81Float *f) {
     if (f->mantissa->len == 1 && f->mantissa->digits[0] == 0) {
         f->exponent = 0;
         f->sign = 0;
@@ -572,7 +627,7 @@ TritError t81float_normalize(T81Float *f) {
     return TRIT_OK;
 }
 
-TritError t81float_add(T81Float *A, T81Float *B, T81Float **result) {
+static TritError t81float_add(T81Float *A, T81Float *B, T81Float **result) {
     *result = (T81Float*)calloc(1, sizeof(T81Float));
     if (!*result) return TRIT_MEM_FAIL;
     int exp_diff = A->exponent - B->exponent;
@@ -580,40 +635,40 @@ TritError t81float_add(T81Float *A, T81Float *B, T81Float **result) {
     if (exp_diff > 0) {
         T81BigInt *temp;
         TritError err = t81bigint_power(new_t81bigint(BASE_81), exp_diff, &temp);
-        if (err != TRIT_OK) { t81bigint_free(a_mant); t81bigint_free(b_mant); free(*result); return err; }
+        if (err != TRIT_OK) { free_t81bigint(a_mant); free_t81bigint(b_mant); free(*result); return err; }
         err = t81bigint_multiply(b_mant, temp, &b_mant);
-        t81bigint_free(temp);
-        if (err != TRIT_OK) { t81bigint_free(a_mant); t81bigint_free(b_mant); free(*result); return err; }
+        free_t81bigint(temp);
+        if (err != TRIT_OK) { free_t81bigint(a_mant); free_t81bigint(b_mant); free(*result); return err; }
         (*result)->exponent = A->exponent;
     } else if (exp_diff < 0) {
         T81BigInt *temp;
         TritError err = t81bigint_power(new_t81bigint(BASE_81), -exp_diff, &temp);
-        if (err != TRIT_OK) { t81bigint_free(a_mant); t81bigint_free(b_mant); free(*result); return err; }
+        if (err != TRIT_OK) { free_t81bigint(a_mant); free_t81bigint(b_mant); free(*result); return err; }
         err = t81bigint_multiply(a_mant, temp, &a_mant);
-        t81bigint_free(temp);
-        if (err != TRIT_OK) { t81bigint_free(a_mant); t81bigint_free(b_mant); free(*result); return err; }
+        free_t81bigint(temp);
+        if (err != TRIT_OK) { free_t81bigint(a_mant); free_t81bigint(b_mant); free(*result); return err; }
         (*result)->exponent = B->exponent;
     } else {
         (*result)->exponent = A->exponent;
     }
     TritError err = t81bigint_add(a_mant, b_mant, &(*result)->mantissa);
-    if (err != TRIT_OK) { t81bigint_free(a_mant); t81bigint_free(b_mant); free(*result); return err; }
+    if (err != TRIT_OK) { free_t81bigint(a_mant); free_t81bigint(b_mant); free(*result); return err; }
     (*result)->sign = (A->sign == B->sign) ? A->sign : (t81bigint_compare(a_mant, b_mant) >= 0 ? A->sign : B->sign);
-    t81bigint_free(a_mant); t81bigint_free(b_mant);
+    free_t81bigint(a_mant); free_t81bigint(b_mant);
     return t81float_normalize(*result);
 }
 
-TritError t81float_subtract(T81Float *A, T81Float *B, T81Float **result) {
+static TritError t81float_subtract(T81Float *A, T81Float *B, T81Float **result) {
     T81Float *neg_B = (T81Float*)calloc(1, sizeof(T81Float));
     neg_B->mantissa = copy_t81bigint(B->mantissa);
     neg_B->exponent = B->exponent;
     neg_B->sign = !B->sign;
     TritError err = t81float_add(A, neg_B, result);
-    t81float_free(neg_B);
+    free_t81float(neg_B);
     return err;
 }
 
-TritError t81float_multiply(T81Float *A, T81Float *B, T81Float **result) {
+static TritError t81float_multiply(T81Float *A, T81Float *B, T81Float **result) {
     *result = (T81Float*)calloc(1, sizeof(T81Float));
     if (!*result) return TRIT_MEM_FAIL;
     TritError err = t81bigint_multiply(A->mantissa, B->mantissa, &(*result)->mantissa);
@@ -621,131 +676,186 @@ TritError t81float_multiply(T81Float *A, T81Float *B, T81Float **result) {
     (*result)->exponent = A->exponent + B->exponent;
     (*result)->sign = (A->sign != B->sign) ? 1 : 0;
     err = t81float_normalize(*result);
-    if (err != TRIT_OK) { t81float_free(*result); free(*result); return err; }
+    if (err != TRIT_OK) { free_t81float(*result); free(*result); return err; }
     return TRIT_OK;
 }
 
-TritError t81float_divide(T81Float *A, T81Float *B, T81Float **result) {
+static TritError t81float_divide(T81Float *A, T81Float *B, T81Float **result) {
     if (B->mantissa->len == 1 && B->mantissa->digits[0] == 0) return TRIT_DIV_ZERO;
     *result = (T81Float*)calloc(1, sizeof(T81Float));
     if (!*result) return TRIT_MEM_FAIL;
     T81BigInt *quotient, *remainder;
-    TritError err = t81bigint_divide(A->mantissa, B->mantissa, &quotient, &remainder);
+    TritError err = t81bigint_divide(A->mantissa, B->mantissa, "ient, &remainder);
     if (err != TRIT_OK) { free(*result); return err; }
     (*result)->mantissa = quotient;
     (*result)->exponent = A->exponent - B->exponent;
     (*result)->sign = (A->sign != B->sign) ? 1 : 0;
-    t81bigint_free(remainder);
+    free_t81bigint(remainder);
     err = t81float_normalize(*result);
-    if (err != TRIT_OK) { t81float_free(*result); free(*result); return err; }
+    if (err != TRIT_OK) { free_t81float(*result); free(*result); return err; }
     return TRIT_OK;
 }
 
-@*5 Main Function: Comprehensive Testing.
-Tests all arithmetic operations for all types with optimizations.
+/* C Interface Implementations for T81Float */
+T81FloatHandle t81float_new(const char* mantissa_str, int exponent) {
+    return (T81FloatHandle)new_t81float(mantissa_str, exponent);
+}
+void t81float_free(T81FloatHandle h) { free_t81float((T81Float*)h); }
+TritError t81float_get_mantissa(T81FloatHandle h, T81BigIntHandle* mantissa) {
+    T81Float* f = (T81Float*)h;
+    *mantissa = (T81BigIntHandle)copy_t81bigint(f->mantissa);
+    return (*mantissa) ? TRIT_OK : TRIT_MEM_FAIL;
+}
+TritError t81float_get_exponent(T81FloatHandle h, int* exponent) {
+    T81Float* f = (T81Float*)h;
+    *exponent = f->exponent;
+    return TRIT_OK;
+}
+TritError t81float_add(T81FloatHandle a, T81FloatHandle b, T81FloatHandle* result) {
+    return t81float_add((T81Float*)a, (T81Float*)b, (T81Float**)result);
+}
+TritError t81float_subtract(T81FloatHandle a, T81FloatHandle b, T81FloatHandle* result) {
+    return t81float_subtract((T81Float*)a, (T81Float*)b, (T81Float**)result);
+}
+TritError t81float_multiply(T81FloatHandle a, T81FloatHandle b, T81FloatHandle* result) {
+    return t81float_multiply((T81Float*)a, (T81Float*)b, (T81Float**)result);
+}
+TritError t81float_divide(T81FloatHandle a, T81FloatHandle b, T81FloatHandle* result) {
+    return t81float_divide((T81Float*)a, (T81Float*)b, (T81Float**)result);
+}
+
+@*5 Main Function: Comprehensive Testing and Binding Demonstration.
+Tests all operations and demonstrates C interface for bindings.
 @c
 int main(void) {
     char *resultStr;
 
-    /* T81BigInt Tests */
-    T81BigInt *A, *B, *sum, *diff, *prod, *quot, *rem;
-    parse_trit_string("102", &A);
-    parse_trit_string("21", &B);
-    t81bigint_add(A, B, &sum);
-    t81bigint_to_trit_string(sum, &resultStr);
+    /* T81BigInt Tests via C Interface */
+    T81BigIntHandle a = t81bigint_from_string("102");
+    T81BigIntHandle b = t81bigint_from_string("21");
+    T81BigIntHandle sum;
+    t81bigint_add(a, b, &sum);
+    t81bigint_to_string(sum, &resultStr);
     printf("T81BigInt Add (102 + 21): %s\n", resultStr); /* Expected: 123 */
     free(resultStr); t81bigint_free(sum);
 
-    t81bigint_subtract(A, B, &diff);
-    t81bigint_to_trit_string(diff, &resultStr);
+    T81BigIntHandle diff;
+    t81bigint_subtract(a, b, &diff);
+    t81bigint_to_string(diff, &resultStr);
     printf("T81BigInt Subtract (102 - 21): %s\n", resultStr); /* Expected: 81 */
     free(resultStr); t81bigint_free(diff);
 
-    t81bigint_multiply(A, B, &prod);
-    t81bigint_to_trit_string(prod, &resultStr);
+    T81BigIntHandle prod;
+    t81bigint_multiply(a, b, &prod);
+    t81bigint_to_string(prod, &resultStr);
     printf("T81BigInt Multiply (102 * 21): %s\n", resultStr); /* Expected: 2142 */
     free(resultStr); t81bigint_free(prod);
 
-    t81bigint_divide(A, B, &quot, &rem);
-    t81bigint_to_trit_string(quot, &resultStr);
+    T81BigIntHandle quot, rem;
+    t81bigint_divide(a, b, ", &rem);
+    t81bigint_to_string(quot, &resultStr);
     printf("T81BigInt Divide (102 / 21) Quotient: %s\n", resultStr); /* Expected: 4 */
     free(resultStr);
-    t81bigint_to_trit_string(rem, &resultStr);
+    t81bigint_to_string(rem, &resultStr);
     printf("Remainder: %s\n", resultStr); /* Expected: 18 */
     free(resultStr); t81bigint_free(quot); t81bigint_free(rem);
 
-    T81BigInt *bin;
-    t81bigint_from_binary("1010", &bin);
-    t81bigint_to_trit_string(bin, &resultStr);
+    T81BigIntHandle bin = t81bigint_from_binary("1010");
+    t81bigint_to_string(bin, &resultStr);
     printf("Binary '1010' to T81BigInt: %s\n", resultStr); /* Expected: 10 */
     free(resultStr); t81bigint_free(bin);
-    t81bigint_free(A); t81bigint_free(B);
+    t81bigint_free(a); t81bigint_free(b);
 
-    /* T81Fraction Tests */
-    T81Fraction *F1 = new_t81fraction("2", "4"); /* 1/2 after simplification */
-    T81Fraction *F2 = new_t81fraction("1", "3");
-    T81Fraction *Fsum, *Fdiff, *Fprod, *Fquot;
-    t81fraction_add(F1, F2, &Fsum);
-    t81bigint_to_trit_string(Fsum->numerator, &resultStr);
+    /* T81Fraction Tests via C Interface */
+    T81FractionHandle f1 = t81fraction_new("2", "4"); /* 1/2 after simplification */
+    T81FractionHandle f2 = t81fraction_new("1", "3");
+    T81FractionHandle fsum;
+    t81fraction_add(f1, f2, &fsum);
+    T81BigIntHandle num, den;
+    t81fraction_get_num(fsum, &num);
+    t81bigint_to_string(num, &resultStr);
     printf("T81Fraction Add (1/2 + 1/3) Numerator: %s\n", resultStr); /* Expected: 5 */
-    free(resultStr);
-    t81bigint_to_trit_string(Fsum->denominator, &resultStr);
+    free(resultStr); t81bigint_free(num);
+    t81fraction_get_den(fsum, &den);
+    t81bigint_to_string(den, &resultStr);
     printf("Denominator: %s\n", resultStr); /* Expected: 6 */
-    free(resultStr);
+    free(resultStr); t81bigint_free(den);
 
-    t81fraction_subtract(F1, F2, &Fdiff);
-    t81bigint_to_trit_string(Fdiff->numerator, &resultStr);
+    T81FractionHandle fdiff;
+    t81fraction_subtract(f1, f2, &fdiff);
+    t81fraction_get_num(fdiff, &num);
+    t81bigint_to_string(num, &resultStr);
     printf("T81Fraction Subtract (1/2 - 1/3) Numerator: %s\n", resultStr); /* Expected: 1 */
-    free(resultStr);
-    t81bigint_to_trit_string(Fdiff->denominator, &resultStr);
+    free(resultStr); t81bigint_free(num);
+    t81fraction_get_den(fdiff, &den);
+    t81bigint_to_string(den, &resultStr);
     printf("Denominator: %s\n", resultStr); /* Expected: 6 */
-    free(resultStr);
+    free(resultStr); t81bigint_free(den);
 
-    t81fraction_multiply(F1, F2, &Fprod);
-    t81bigint_to_trit_string(Fprod->numerator, &resultStr);
+    T81FractionHandle fprod;
+    t81fraction_multiply(f1, f2, &fprod);
+    t81fraction_get_num(fprod, &num);
+    t81bigint_to_string(num, &resultStr);
     printf("T81Fraction Multiply (1/2 * 1/3) Numerator: %s\n", resultStr); /* Expected: 1 */
-    free(resultStr);
-    t81bigint_to_trit_string(Fprod->denominator, &resultStr);
+    free(resultStr); t81bigint_free(num);
+    t81fraction_get_den(fprod, &den);
+    t81bigint_to_string(den, &resultStr);
     printf("Denominator: %s\n", resultStr); /* Expected: 6 */
-    free(resultStr);
+    free(resultStr); t81bigint_free(den);
 
-    t81fraction_divide(F1, F2, &Fquot);
-    t81bigint_to_trit_string(Fquot->numerator, &resultStr);
+    T81FractionHandle fquot;
+    t81fraction_divide(f1, f2, &fquot);
+    t81fraction_get_num(fquot, &num);
+    t81bigint_to_string(num, &resultStr);
     printf("T81Fraction Divide (1/2 / 1/3) Numerator: %s\n", resultStr); /* Expected: 3 */
-    free(resultStr);
-    t81bigint_to_trit_string(Fquot->denominator, &resultStr);
+    free(resultStr); t81bigint_free(num);
+    t81fraction_get_den(fquot, &den);
+    t81bigint_to_string(den, &resultStr);
     printf("Denominator: %s\n", resultStr); /* Expected: 2 */
-    free(resultStr);
+    free(resultStr); t81bigint_free(den);
 
-    t81fraction_free(F1); t81fraction_free(F2); t81fraction_free(Fsum);
-    t81fraction_free(Fdiff); t81fraction_free(Fprod); t81fraction_free(Fquot);
+    t81fraction_free(f1); t81fraction_free(f2); t81fraction_free(fsum);
+    t81fraction_free(fdiff); t81fraction_free(fprod); t81fraction_free(fquot);
 
-    /* T81Float Tests */
-    T81Float *F3 = new_t81float("102", 0);
-    T81Float *F4 = new_t81float("21", 0);
-    T81Float *Fsum_f, *Fdiff_f, *Fprod_f, *Fquot_f;
-    t81float_add(F3, F4, &Fsum_f);
-    t81bigint_to_trit_string(Fsum_f->mantissa, &resultStr);
-    printf("T81Float Add (102 + 21) Mantissa: %s, Exponent: %d\n", resultStr, Fsum_f->exponent); /* 123, 0 */
-    free(resultStr);
+    /* T81Float Tests via C Interface */
+    T81FloatHandle f3 = t81float_new("102", 0);
+    T81FloatHandle f4 = t81float_new("21", 0);
+    T81FloatHandle fsum_f;
+    t81float_add(f3, f4, &fsum_f);
+    T81BigIntHandle mant;
+    int exp;
+    t81float_get_mantissa(fsum_f, &mant);
+    t81bigint_to_string(mant, &resultStr);
+    t81float_get_exponent(fsum_f, &exp);
+    printf("T81Float Add (102 + 21) Mantissa: %s, Exponent: %d\n", resultStr, exp); /* 123, 0 */
+    free(resultStr); t81bigint_free(mant);
 
-    t81float_subtract(F3, F4, &Fdiff_f);
-    t81bigint_to_trit_string(Fdiff_f->mantissa, &resultStr);
-    printf("T81Float Subtract (102 - 21) Mantissa: %s, Exponent: %d\n", resultStr, Fdiff_f->exponent); /* 81, 0 */
-    free(resultStr);
+    T81FloatHandle fdiff_f;
+    t81float_subtract(f3, f4, &fdiff_f);
+    t81float_get_mantissa(fdiff_f, &mant);
+    t81bigint_to_string(mant, &resultStr);
+    t81float_get_exponent(fdiff_f, &exp);
+    printf("T81Float Subtract (102 - 21) Mantissa: %s, Exponent: %d\n", resultStr, exp); /* 81, 0 */
+    free(resultStr); t81bigint_free(mant);
 
-    t81float_multiply(F3, F4, &Fprod_f);
-    t81bigint_to_trit_string(Fprod_f->mantissa, &resultStr);
-    printf("T81Float Multiply (102 * 21) Mantissa: %s, Exponent: %d\n", resultStr, Fprod_f->exponent); /* 2142, 0 */
-    free(resultStr);
+    T81FloatHandle fprod_f;
+    t81float_multiply(f3, f4, &fprod_f);
+    t81float_get_mantissa(fprod_f, &mant);
+    t81bigint_to_string(mant, &resultStr);
+    t81float_get_exponent(fprod_f, &exp);
+    printf("T81Float Multiply (102 * 21) Mantissa: %s, Exponent: %d\n", resultStr, exp); /* 2142, 0 */
+    free(resultStr); t81bigint_free(mant);
 
-    t81float_divide(F3, F4, &Fquot_f);
-    t81bigint_to_trit_string(Fquot_f->mantissa, &resultStr);
-    printf("T81Float Divide (102 / 21) Mantissa: %s, Exponent: %d\n", resultStr, Fquot_f->exponent); /* 4, 0 */
-    free(resultStr);
+    T81FloatHandle fquot_f;
+    t81float_divide(f3, f4, &fquot_f);
+    t81float_get_mantissa(fquot_f, &mant);
+    t81bigint_to_string(mant, &resultStr);
+    t81float_get_exponent(fquot_f, &exp);
+    printf("T81Float Divide (102 / 21) Mantissa: %s, Exponent: %d\n", resultStr, exp); /* 4, 0 */
+    free(resultStr); t81bigint_free(mant);
 
-    t81float_free(F3); t81float_free(F4); t81float_free(Fsum_f);
-    t81float_free(Fdiff_f); t81float_free(Fprod_f); t81float_free(Fquot_f);
+    t81float_free(f3); t81float_free(f4); t81float_free(fsum_f);
+    t81float_free(fdiff_f); t81float_free(fprod_f); t81float_free(fquot_f);
 
     return 0;
 }
