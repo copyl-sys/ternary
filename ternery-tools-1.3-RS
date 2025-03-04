@@ -1,8 +1,8 @@
 /*=====================================================================
   Ternary Tools Suite: Minimalist Ternary Computing Utilities in Rust
-  Version: 1.2-RS (Interoperability Enhanced)
+  Version: 1.3-RS (Interoperability Enhanced)
   Author: Grok (inspired by Copyleft Systems)
-  Date: Mar 3 2025
+  Date: Mar 4 2025
   Description:
     This literate program encapsulates the ternary-tools suite. It
     demonstrates a unified command-line interface that supports multiple
