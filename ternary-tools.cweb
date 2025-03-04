@@ -1,41 +1,43 @@
 /*=====================================================================
   Ternary Tools Suite: Minimalist Ternary Computing Utilities in Rust
-  Version: 1.0-RS
+  Version: 1.1-RS
   Author: Grok (inspired by Copyleft Systems)
   Date: Mar 3 2025
 
-  This literate program reimagines Ternary Systems B02-RS as a suite of small,
-  focused Rust tools, each designed to do one thing well in the Linux tradition.
-  The suite includes:
-    - ternary-calc: Evaluates ternary arithmetic expressions from stdin.
-    - ternary-hanoi: Solves the Tower of Hanoi problem for a given number of disks.
+  This literate program presents a suite of small, focused Rust tools for ternary
+  computing, adhering to Linux's "do one thing well" philosophy. Each utility is
+  designed for pipeline use, reading from stdin where practical, writing to stdout,
+  and reporting errors to stderr. The suite refactors and extends Ternary Systems
+  B02-RS, covering its core features plus new utilities:
+    - ternary-calc: Evaluates ternary arithmetic expressions.
+    - ternary-hanoi: Solves the Tower of Hanoi problem.
     - ternary-matrix: Performs matrix operations (add, multiply, serialize, deserialize).
-    - ternary-opcode: Encodes or validates ternary opcodes with a checksum.
-  Each tool is standalone, reads from stdin where practical, writes to stdout,
-  and reports errors to stderr, enabling pipeline composition (e.g.,
-  `echo "12+21" | ternary-calc`). Built with Rust for safety and portability,
-  these utilities are lightweight and script-friendly.
+    - ternary-opcode: Encodes or validates ternary opcodes.
+    - ternary-convert: Converts between decimal and ternary numbers.
+    - ternary-checksum: Computes or verifies ternary checksums.
+  Built with Rust for safety and portability, these tools are lightweight, composable,
+  and ideal for scripting (e.g., `echo "12+21" | ternary-calc`).
 =====================================================================*/
 
 /*=====================================================================
   Ternary Calculator: ternary-calc.rs
-  Evaluates a single ternary arithmetic expression from stdin, outputs the
-  result in ternary format to stdout. Supports +, -, *, /, and parentheses.
+  Evaluates a ternary arithmetic expression from stdin, outputs to stdout in
+  ternary (default) or decimal (--decimal flag). Supports +, -, *, /, and parentheses.
 =====================================================================*/
 @* Ternary Calculator: ternary-calc.rs
 @o ternary-calc.rs
 @c
 use std::io::{self, BufRead, Write};
+use std::env;
 use std::process;
 
-// Error enum for parsing ternary expressions.
 #[derive(Debug)]
 enum ParseError {
-    InvalidDigit(char),     // Non-ternary digit encountered.
-    UnexpectedChar(char),   // Invalid syntax character.
-    MissingClosingParen,    // Unmatched opening parenthesis.
-    DivisionByZero,         // Division by zero attempted.
-    EmptyInput,             // No input provided.
+    InvalidDigit(char),
+    UnexpectedChar(char),
+    MissingClosingParen,
+    DivisionByZero,
+    EmptyInput,
 }
 
 impl std::fmt::Display for ParseError {
@@ -50,7 +52,6 @@ impl std::fmt::Display for ParseError {
     }
 }
 
-/// Evaluates a ternary expression from a string, returning the result or an error.
 fn evaluate_ternary(expr: &str) -> Result<i32, ParseError> {
     let expr = expr.trim();
     if expr.is_empty() { return Err(ParseError::EmptyInput); }
@@ -133,7 +134,6 @@ fn skip_whitespace(chars: &[char], pos: &mut usize) {
     while *pos < chars.len() && chars[*pos].is_whitespace() { *pos += 1; }
 }
 
-/// Converts an integer to ternary string representation.
 fn int_to_ternary(n: i32) -> String {
     if n == 0 { return "0".to_string(); }
     let mut digits = Vec::new();
@@ -147,18 +147,22 @@ fn int_to_ternary(n: i32) -> String {
 }
 
 fn main() {
-    let stdin = io::stdin();
+    let args: Vec<String> = env::args().collect();
+    let decimal_output = args.iter().any(|arg| arg == "--decimal");
+
     let mut input = String::new();
-    if let Err(e) = stdin.lock().read_line(&mut input) {
+    io::stdin().lock().read_line(&mut input).unwrap_or_else(|e| {
         eprintln!("error: failed to read input: {}", e);
         process::exit(1);
-    }
+    });
+
     match evaluate_ternary(&input) {
         Ok(result) => {
-            if let Err(e) = writeln!(io::stdout(), "{}", int_to_ternary(result)) {
+            let output = if decimal_output { result.to_string() } else { int_to_ternary(result) };
+            writeln!(io::stdout(), "{}", output).unwrap_or_else(|e| {
                 eprintln!("error: failed to write output: {}", e);
                 process::exit(1);
-            }
+            });
         }
         Err(e) => {
             eprintln!("error: {}", e);
@@ -170,8 +174,7 @@ fn main() {
 
 /*=====================================================================
   Ternary Hanoi Solver: ternary-hanoi.rs
-  Solves the Tower of Hanoi for a number of disks provided via stdin,
-  printing moves to stdout. Takes a single integer input.
+  Solves Tower of Hanoi for a number of disks from stdin, printing moves to stdout.
 =====================================================================*/
 @* Ternary Hanoi Solver: ternary-hanoi.rs
 @o ternary-hanoi.rs
@@ -206,12 +209,11 @@ fn print_state(state: &[i32]) {
 }
 
 fn main() {
-    let stdin = io::stdin();
     let mut input = String::new();
-    if let Err(e) = stdin.lock().read_line(&mut input) {
+    io::stdin().lock().read_line(&mut input).unwrap_or_else(|e| {
         eprintln!("error: failed to read input: {}", e);
         process::exit(1);
-    }
+    });
     match input.trim().parse::<i32>() {
         Ok(n) if n >= 0 => solve_hanoi(n),
         Ok(_) => {
@@ -228,8 +230,8 @@ fn main() {
 
 /*=====================================================================
   Ternary Matrix Operations: ternary-matrix.rs
-  Performs matrix operations based on a command and input from stdin.
-  Supports add, multiply, serialize, deserialize via flags and file-based I/O.
+  Performs matrix operations with subcommands (add, mul, ser, des). Add and
+  multiply now support stdin input, while ser/des use files.
 =====================================================================*/
 @* Ternary Matrix Operations: ternary-matrix.rs
 @o ternary-matrix.rs
@@ -297,25 +299,13 @@ impl TMatrix {
     fn deserialize(filename: &str) -> io::Result<TMatrix> {
         let file = File::open(filename)?;
         let reader = BufReader::new(file);
-        let mut lines = reader.lines();
-        let first_line = lines.next().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "empty file"))??;
-        let dims: Vec<usize> = first_line.split_whitespace()
-            .map(|s| s.parse().map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e)))
-            .collect::<Result<_, _>>()?;
-        if dims.len() != 2 { return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid dimensions")); }
-        let rows = dims[0];
-        let cols = dims[1];
-        let mut data = Vec::with_capacity(rows);
-        for line in lines.take(rows) {
-            let line = line?;
-            let row: Vec<i32> = line.split_whitespace()
-                .map(|s| parse_ternary(s).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e)))
-                .collect::<Result<_, _>>()?;
-            if row.len() != cols { return Err(io::Error::new(io::ErrorKind::InvalidData, "row length mismatch")); }
-            data.push(row);
-        }
-        if data.len() != rows { return Err(io::Error::new(io::ErrorKind::InvalidData, "insufficient rows")); }
-        Ok(TMatrix { rows, cols, data })
+        parse_matrix(reader)
+    }
+
+    fn from_stdin() -> io::Result<TMatrix> {
+        let stdin = io::stdin();
+        let reader = stdin.lock();
+        parse_matrix(reader)
     }
 }
 
@@ -347,6 +337,28 @@ fn parse_ternary(s: &str) -> io::Result<i32> {
     Ok(if is_negative { -value } else { value })
 }
 
+fn parse_matrix<R: BufRead>(reader: R) -> io::Result<TMatrix> {
+    let mut lines = reader.lines();
+    let first_line = lines.next().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "empty input"))??;
+    let dims: Vec<usize> = first_line.split_whitespace()
+        .map(|s| s.parse().map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e)))
+        .collect::<Result<_, _>>()?;
+    if dims.len() != 2 { return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid dimensions")); }
+    let rows = dims[0];
+    let cols = dims[1];
+    let mut data = Vec::with_capacity(rows);
+    for line in lines.take(rows) {
+        let line = line?;
+        let row: Vec<i32> = line.split_whitespace()
+            .map(|s| parse_ternary(s).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e)))
+            .collect::<Result<_, _>>()?;
+        if row.len() != cols { return Err(io::Error::new(io::ErrorKind::InvalidData, "row length mismatch")); }
+        data.push(row);
+    }
+    if data.len() != rows { return Err(io::Error::new(io::ErrorKind::InvalidData, "insufficient rows")); }
+    Ok(TMatrix { rows, cols, data })
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
@@ -356,95 +368,30 @@ fn main() {
 
     match args[1].as_str() {
         "add" => {
-            if args.len() != 4 {
-                eprintln!("error: usage: ternary-matrix add <file1> <file2>");
-                process::exit(1);
-            }
-            let m1 = TMatrix::deserialize(&args[2]).unwrap_or_else(|e| {
-                eprintln!("error: failed to read {}: {}", args[2], e);
-                process::exit(1);
-            });
-            let m2 = TMatrix::deserialize(&args[3]).unwrap_or_else(|e| {
-                eprintln!("error: failed to read {}: {}", args[3], e);
-                process::exit(1);
-            });
-            let result = m1.add(&m2).unwrap_or_else(|e| {
-                eprintln!("error: {}", e);
-                process::exit(1);
-            });
-            result.serialize("/dev/stdout").unwrap_or_else(|e| {
-                eprintln!("error: failed to write result: {}", e);
-                process::exit(1);
-            });
+            let m1 = if args.len() > 2 { TMatrix::deserialize(&args[2]) } else { TMatrix::from_stdin() }
+                .unwrap_or_else(|e| { eprintln!("error: failed to read first matrix: {}", e); process::exit(1); });
+            let m2 = if args.len() > 3 { TMatrix::deserialize(&args[3]) } else { TMatrix::from_stdin() }
+                .unwrap_or_else(|e| { eprintln!("error: failed to read second matrix: {}", e); process::exit(1); });
+            let result = m1.add(&m2).unwrap_or_else(|e| { eprintln!("error: {}", e); process::exit(1); });
+            result.serialize("/dev/stdout").unwrap_or_else(|e| { eprintln!("error: failed to write result: {}", e); process::exit(1); });
         }
         "mul" => {
-            if args.len() != 4 {
-                eprintln!("error: usage: ternary-matrix mul <file1> <file2>");
-                process::exit(1);
-            }
-            let m1 = TMatrix::deserialize(&args[2]).unwrap_or_else(|e| {
-                eprintln!("error: failed to read {}: {}", args[2], e);
-                process::exit(1);
-            });
-            let m2 = TMatrix::deserialize(&args[3]).unwrap_or_else(|e| {
-                eprintln!("error: failed to read {}: {}", args[3], e);
-                process::exit(1);
-            });
-            let result = m1.multiply(&m2).unwrap_or_else(|e| {
-                eprintln!("error: {}", e);
-                process::exit(1);
-            });
-            result.serialize("/dev/stdout").unwrap_or_else(|e| {
-                eprintln!("error: failed to write result: {}", e);
-                process::exit(1);
-            });
+            let m1 = if args.len() > 2 { TMatrix::deserialize(&args[2]) } else { TMatrix::from_stdin() }
+                .unwrap_or_else(|e| { eprintln!("error: failed to read first matrix: {}", e); process::exit(1); });
+            let m2 = if args.len() > 3 { TMatrix::deserialize(&args[3]) } else { TMatrix::from_stdin() }
+                .unwrap_or_else(|e| { eprintln!("error: failed to read second matrix: {}", e); process::exit(1); });
+            let result = m1.multiply(&m2).unwrap_or_else(|e| { eprintln!("error: {}", e); process::exit(1); });
+            result.serialize("/dev/stdout").unwrap_or_else(|e| { eprintln!("error: failed to write result: {}", e); process::exit(1); });
         }
         "ser" => {
             if args.len() != 3 {
                 eprintln!("error: usage: ternary-matrix ser <output_file>");
                 process::exit(1);
             }
-            let mut input = String::new();
-            io::stdin().lock().read_to_string(&mut input).unwrap_or_else(|e| {
-                eprintln!("error: failed to read input: {}", e);
+            let matrix = TMatrix::from_stdin().unwrap_or_else(|e| {
+                eprintln!("error: failed to read matrix: {}", e);
                 process::exit(1);
             });
-            let lines: Vec<&str> = input.lines().collect();
-            if lines.len() < 1 {
-                eprintln!("error: empty matrix input");
-                process::exit(1);
-            }
-            let dims: Vec<usize> = lines[0].split_whitespace()
-                .map(|s| s.parse().unwrap_or_else(|_| {
-                    eprintln!("error: invalid dimensions");
-                    process::exit(1);
-                }))
-                .collect();
-            if dims.len() != 2 {
-                eprintln!("error: invalid dimensions");
-                process::exit(1);
-            }
-            let rows = dims[0];
-            let cols = dims[1];
-            let mut data = Vec::with_capacity(rows);
-            for line in &lines[1..] {
-                let row: Vec<i32> = line.split_whitespace()
-                    .map(|s| parse_ternary(s).unwrap_or_else(|e| {
-                        eprintln!("error: invalid matrix data: {}", e);
-                        process::exit(1);
-                    }))
-                    .collect();
-                if row.len() != cols {
-                    eprintln!("error: row length mismatch");
-                    process::exit(1);
-                }
-                data.push(row);
-            }
-            if data.len() != rows {
-                eprintln!("error: insufficient rows");
-                process::exit(1);
-            }
-            let matrix = TMatrix { rows, cols, data };
             matrix.serialize(&args[2]).unwrap_or_else(|e| {
                 eprintln!("error: failed to write {}: {}", args[2], e);
                 process::exit(1);
@@ -474,8 +421,7 @@ fn main() {
 
 /*=====================================================================
   Ternary Opcode Tool: ternary-opcode.rs
-  Encodes or validates a ternary opcode based on a flag and stdin input.
-  Outputs encoded string or validation result to stdout.
+  Encodes or validates a ternary opcode from stdin, with a checksum-only mode.
 =====================================================================*/
 @* Ternary Opcode Tool: ternary-opcode.rs
 @o ternary-opcode.rs
@@ -517,19 +463,24 @@ fn discrete_opcode_validate(encoded: &str) -> bool {
     computed_sum == (checksum_digit as u32 - '0' as u32) as i32
 }
 
+fn compute_checksum(s: &str) -> i32 {
+    s.chars().filter(|&c| c >= '0' && c <= '2')
+        .map(|c| (c as u32 - '0' as u32) as i32)
+        .sum::<i32>() % 3
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("error: missing operation (encode or validate)");
+        eprintln!("error: missing operation (encode, validate, checksum)");
         process::exit(1);
     }
 
-    let stdin = io::stdin();
     let mut input = String::new();
-    if let Err(e) = stdin.lock().read_line(&mut input) {
+    io::stdin().lock().read_line(&mut input).unwrap_or_else(|e| {
         eprintln!("error: failed to read input: {}", e);
         process::exit(1);
-    }
+    });
     let input = input.trim();
 
     match args[1].as_str() {
@@ -538,21 +489,151 @@ fn main() {
                 eprintln!("error: invalid integer input");
                 process::exit(1);
             });
-            let encoded = discrete_opcode_encode(opcode);
-            if let Err(e) = writeln!(io::stdout(), "{}", encoded) {
+            writeln!(io::stdout(), "{}", discrete_opcode_encode(opcode)).unwrap_or_else(|e| {
                 eprintln!("error: failed to write output: {}", e);
                 process::exit(1);
-            }
+            });
         }
         "validate" => {
             let valid = discrete_opcode_validate(input);
-            if let Err(e) = writeln!(io::stdout(), "{}", if valid { "valid" } else { "invalid" }) {
+            writeln!(io::stdout(), "{}", if valid { "valid" } else { "invalid" }).unwrap_or_else(|e| {
                 eprintln!("error: failed to write output: {}", e);
                 process::exit(1);
-            }
+            });
+        }
+        "checksum" => {
+            writeln!(io::stdout(), "{}", compute_checksum(input)).unwrap_or_else(|e| {
+                eprintln!("error: failed to write output: {}", e);
+                process::exit(1);
+            });
         }
         _ => {
-            eprintln!("error: unknown operation '{}'; use encode or validate", args[1]);
+            eprintln!("error: unknown operation '{}'; use encode, validate, or checksum", args[1]);
+            process::exit(1);
+        }
+    }
+}
+@*/
+
+/*=====================================================================
+  Ternary Converter: ternary-convert.rs
+  Converts between decimal and ternary numbers from stdin, with direction via flag.
+=====================================================================*/
+@* Ternary Converter: ternary-convert.rs
+@o ternary-convert.rs
+@c
+use std::io::{self, BufRead, Write};
+use std::env;
+use std::process;
+
+fn int_to_ternary(n: i32) -> String {
+    if n == 0 { return "0".to_string(); }
+    let mut digits = Vec::new();
+    let mut num = n.abs();
+    while num > 0 {
+        digits.push((num % 3) as u8 + b'0');
+        num /= 3;
+    }
+    if n < 0 { digits.push(b'-'); }
+    String::from_utf8(digits.into_iter().rev().collect()).unwrap()
+}
+
+fn parse_ternary(s: &str) -> Result<i32, String> {
+    let mut value = 0;
+    let mut is_negative = false;
+    let chars: Vec<char> = s.chars().collect();
+    let mut i = 0;
+    if chars.is_empty() { return Err("empty input".to_string()); }
+    if chars[0] == '-' { is_negative = true; i += 1; }
+    while i < chars.len() {
+        let c = chars[i];
+        if c < '0' || c > '2' { return Err(format!("invalid ternary digit '{}'", c)); }
+        value = value * 3 + (c as i32 - '0' as i32);
+        i += 1;
+    }
+    Ok(if is_negative { -value } else { value })
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let to_decimal = args.iter().any(|arg| arg == "--to-decimal");
+
+    let mut input = String::new();
+    io::stdin().lock().read_line(&mut input).unwrap_or_else(|e| {
+        eprintln!("error: failed to read input: {}", e);
+        process::exit(1);
+    });
+    let input = input.trim();
+
+    let output = if to_decimal {
+        parse_ternary(input).unwrap_or_else(|e| {
+            eprintln!("error: {}", e);
+            process::exit(1);
+        }).to_string()
+    } else {
+        input.parse::<i32>().unwrap_or_else(|_| {
+            eprintln!("error: invalid integer input");
+            process::exit(1);
+        });
+        int_to_ternary(input.parse::<i32>().unwrap())
+    };
+
+    writeln!(io::stdout(), "{}", output).unwrap_or_else(|e| {
+        eprintln!("error: failed to write output: {}", e);
+        process::exit(1);
+    });
+}
+@*/
+
+/*=====================================================================
+  Ternary Checksum Tool: ternary-checksum.rs
+  Computes or verifies a ternary checksum from stdin based on mode.
+=====================================================================*/
+@* Ternary Checksum Tool: ternary-checksum.rs
+@o ternary-checksum.rs
+@c
+use std::io::{self, BufRead, Write};
+use std::env;
+use std::process;
+
+fn compute_checksum(s: &str) -> i32 {
+    s.chars().filter(|&c| c >= '0' && c <= '2')
+        .map(|c| (c as u32 - '0' as u32) as i32)
+        .sum::<i32>() % 3
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let mode = args.get(1).map(|s| s.as_str()).unwrap_or("compute");
+
+    let mut input = String::new();
+    io::stdin().lock().read_line(&mut input).unwrap_or_else(|e| {
+        eprintln!("error: failed to read input: {}", e);
+        process::exit(1);
+    });
+    let input = input.trim();
+
+    match mode {
+        "compute" => {
+            writeln!(io::stdout(), "{}", compute_checksum(input)).unwrap_or_else(|e| {
+                eprintln!("error: failed to write output: {}", e);
+                process::exit(1);
+            });
+        }
+        "verify" => {
+            if input.len() < 2 {
+                eprintln!("error: input too short for verification");
+                process::exit(1);
+            }
+            let (code, check) = input.split_at(input.len() - 1);
+            let valid = compute_checksum(code) == check.parse::<i32>().unwrap_or(-1);
+            writeln!(io::stdout(), "{}", if valid { "valid" } else { "invalid" }).unwrap_or_else(|e| {
+                eprintln!("error: failed to write output: {}", e);
+                process::exit(1);
+            });
+        }
+        _ => {
+            eprintln!("error: unknown mode '{}'; use compute or verify", mode);
             process::exit(1);
         }
     }
