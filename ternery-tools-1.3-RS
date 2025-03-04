@@ -1,0 +1,447 @@
+/*=====================================================================
+  Ternary Tools Suite: Minimalist Ternary Computing Utilities in Rust
+  Version: 1.2-RS (Interoperability Enhanced)
+  Author: Grok (inspired by Copyleft Systems)
+  Date: Mar 3 2025
+  Description:
+    This literate program encapsulates the ternary-tools suite. It
+    demonstrates a unified command-line interface that supports multiple
+    subcommands (e.g., calc, hanoi, matrix, opcode, convert, checksum,
+    alphanum), robust standard I/O handling, and flexible output formatting.
+    Each module is extensively documented to facilitate maintenance
+    and future extensions.
+=====================================================================*/
+
+/*=====================================================================
+  Module 1: Main Module and CLI Dispatcher
+  ---------------------------------------------------------------------
+  This module handles:
+    - Parsing command-line arguments.
+    - Dispatching execution to the appropriate subcommand.
+    - Displaying a unified help message and error reporting.
+=====================================================================*/
+@* Main Module: ternary-tools.cweb
+@o ternary-tools.rs
+@c
+use std::env;
+use std::io::{self, BufRead};
+use std::process;
+
+/// Prints a comprehensive help message.
+fn print_help() {
+    println!("Ternary Tools Suite (Rust Version) - Interoperability Enhanced");
+    println!("Usage:");
+    println!("  ternary-tools <subcommand> [options]");
+    println!();
+    println!("Subcommands:");
+    println!("  calc       Evaluate ternary arithmetic expressions");
+    println!("  hanoi      Solve the Tower of Hanoi problem");
+    println!("  matrix     Perform matrix operations (add/multiply)");
+    println!("  opcode     Validate or encode opcodes");
+    println!("  convert    Convert between decimal and ternary numbers");
+    println!("  checksum   Compute or verify ternary checksums");
+    println!("  alphanum   Encode/decode alphanumeric text to/from ternary");
+    println!();
+    println!("Common Options:");
+    println!("  --input <file>          Read input from a file (default: stdin)");
+    println!("  --output-format <fmt>   Output format: plain (default) or json");
+    println!("  --verbose               Enable verbose logging to stderr");
+    println!("  --help                  Display this help message");
+}
+
+/// Main entry point: dispatches to subcommands.
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 || args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        print_help();
+        return;
+    }
+    let subcommand = &args[1];
+    let sub_args = &args[2..];
+    match subcommand.as_str() {
+        "calc"     => run_calc(sub_args),
+        "hanoi"    => run_hanoi(sub_args),
+        "matrix"   => run_matrix(sub_args),
+        "opcode"   => run_opcode(sub_args),
+        "convert"  => run_convert(sub_args),
+        "checksum" => run_checksum(sub_args),
+        "alphanum" => run_alphanum(sub_args),
+        _ => {
+            eprintln!("Unknown subcommand: '{}'", subcommand);
+            print_help();
+            process::exit(1);
+        }
+    }
+}
+
+/*=====================================================================
+  Module 2: Ternary Calculator Subcommand (calc)
+  ---------------------------------------------------------------------
+  Evaluates ternary arithmetic expressions.
+=====================================================================*/
+fn run_calc(args: &[String]) {
+    let mut input_expr = String::new();
+    let mut output_format = "plain";
+    let mut verbose = false;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--input" => {
+                i += 1;
+                if i < args.len() {
+                    match std::fs::read_to_string(&args[i]) {
+                        Ok(contents) => input_expr = contents.trim().to_string(),
+                        Err(e) => {
+                            eprintln!("Error reading file '{}': {}", args[i], e);
+                            process::exit(1);
+                        }
+                    }
+                } else {
+                    eprintln!("--input flag requires a filename");
+                    process::exit(1);
+                }
+            }
+            "--output-format" => {
+                i += 1;
+                if i < args.len() {
+                    output_format = &args[i];
+                    if output_format != "plain" && output_format != "json" {
+                        eprintln!("Unsupported output format '{}'.", output_format);
+                        process::exit(1);
+                    }
+                } else {
+                    eprintln!("--output-format flag requires an argument");
+                    process::exit(1);
+                }
+            }
+            "--verbose" => { verbose = true; }
+            _ => {
+                if input_expr.is_empty() {
+                    input_expr = args[i].clone();
+                }
+            }
+        }
+        i += 1;
+    }
+    if input_expr.is_empty() {
+        if verbose { eprintln!("Reading from stdin..."); }
+        let stdin = io::stdin();
+        let mut lines = stdin.lock().lines();
+        if let Some(Ok(line)) = lines.next() { input_expr = line; }
+        else { eprintln!("Failed to read from stdin."); process::exit(1); }
+    }
+    match tritjs_eval_expression(&input_expr) {
+        Ok(result) => {
+            let ternary_result = int_to_ternary(result);
+            if output_format == "json" {
+                println!("{{ \"result\": \"{}\", \"value\": {} }}", ternary_result, result);
+            } else {
+                println!("Expression evaluated to (ternary): {}", ternary_result);
+            }
+        }
+        Err(e) => {
+            eprintln!("Error evaluating expression: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+/*=====================================================================
+  Module 3: Additional Subcommands Implementation
+=====================================================================*/
+
+/* --- Tower of Hanoi Solver --- */
+fn run_hanoi(args: &[String]) {
+    let n: u32 = if !args.is_empty() {
+        args[0].parse().unwrap_or(3)
+    } else { 3 };
+    println!("Solving Tower of Hanoi with {} disks:", n);
+    hanoi(n, 'A', 'C', 'B');
+}
+
+/// Recursively solves the Tower of Hanoi.
+fn hanoi(n: u32, from: char, to: char, aux: char) {
+    if n == 1 {
+        println!("Move disk 1 from {} to {}", from, to);
+    } else {
+        hanoi(n - 1, from, aux, to);
+        println!("Move disk {} from {} to {}", n, from, to);
+        hanoi(n - 1, aux, to, from);
+    }
+}
+
+/* --- Matrix Operations --- */
+fn run_matrix(args: &[String]) {
+    if args.len() < 3 {
+        eprintln!("Usage: matrix <add|multiply> <matrix1> <matrix2>");
+        process::exit(1);
+    }
+    let op = args[0].as_str();
+    let m1 = parse_matrix(&args[1]).unwrap_or_else(|e| { eprintln!("Error parsing matrix1: {}", e); process::exit(1); });
+    let m2 = parse_matrix(&args[2]).unwrap_or_else(|e| { eprintln!("Error parsing matrix2: {}", e); process::exit(1); });
+    let result = match op {
+        "add" => matrix_add(&m1, &m2),
+        "multiply" => matrix_multiply(&m1, &m2).unwrap_or_else(|e| { eprintln!("Matrix multiplication error: {}", e); process::exit(1); }),
+        _ => { eprintln!("Unsupported matrix operation: {}. Use 'add' or 'multiply'.", op); process::exit(1); }
+    };
+    println!("Result:");
+    print_matrix(&result);
+}
+
+/// Parses a matrix from a string. Format: rows separated by ';', elements by ','.
+fn parse_matrix(s: &str) -> Result<Vec<Vec<f64>>, String> {
+    let rows: Vec<&str> = s.split(';').collect();
+    let mut matrix = Vec::new();
+    for row in rows {
+        let elems: Result<Vec<f64>, _> = row.split(',')
+            .map(|num| num.trim().parse::<f64>())
+            .collect();
+        matrix.push(elems.map_err(|e| format!("Parsing error: {}", e))?);
+    }
+    // Check that all rows have same length.
+    let len = matrix.first().map(|r| r.len()).unwrap_or(0);
+    if matrix.iter().any(|r| r.len() != len) {
+        return Err("Rows have inconsistent lengths".to_string());
+    }
+    Ok(matrix)
+}
+
+fn matrix_add(a: &Vec<Vec<f64>>, b: &Vec<Vec<f64>>) -> Vec<Vec<f64>> {
+    let rows = a.len();
+    let cols = a[0].len();
+    let mut result = vec![vec![0.0; cols]; rows];
+    for i in 0..rows {
+        for j in 0..cols {
+            result[i][j] = a[i][j] + b[i][j];
+        }
+    }
+    result
+}
+
+fn matrix_multiply(a: &Vec<Vec<f64>>, b: &Vec<Vec<f64>>) -> Result<Vec<Vec<f64>>, String> {
+    let a_rows = a.len();
+    let a_cols = a[0].len();
+    let b_rows = b.len();
+    let b_cols = b[0].len();
+    if a_cols != b_rows {
+        return Err("Incompatible matrix dimensions for multiplication".to_string());
+    }
+    let mut result = vec![vec![0.0; b_cols]; a_rows];
+    for i in 0..a_rows {
+        for j in 0..b_cols {
+            for k in 0..a_cols {
+                result[i][j] += a[i][k] * b[k][j];
+            }
+        }
+    }
+    Ok(result)
+}
+
+fn print_matrix(m: &Vec<Vec<f64>>) {
+    for row in m {
+        let row_str: Vec<String> = row.iter().map(|v| format!("{:.2}", v)).collect();
+        println!("{}", row_str.join(" "));
+    }
+}
+
+/* --- Opcode Utility --- */
+fn run_opcode(args: &[String]) {
+    if args.is_empty() {
+        eprintln!("Usage: opcode <instruction>");
+        process::exit(1);
+    }
+    let opcode = args[0].to_uppercase();
+    let valid_opcodes = vec!["ADD", "SUB", "MUL", "DIV", "NOP", "JMP"];
+    if valid_opcodes.contains(&opcode.as_str()) {
+        println!("Opcode '{}' is valid.", opcode);
+        // For encoding, simply convert each character to its ternary representation.
+        let encoded: Vec<String> = opcode.chars().map(|c| int_to_ternary(c as i32)).collect();
+        println!("Encoded: {}", encoded.join(" "));
+    } else {
+        eprintln!("Invalid opcode: '{}'", opcode);
+        process::exit(1);
+    }
+}
+
+/* --- Conversion Utility --- */
+fn run_convert(args: &[String]) {
+    if args.len() < 2 {
+        eprintln!("Usage: convert --to-ternary <number> OR --to-decimal <ternary_string>");
+        process::exit(1);
+    }
+    match args[0].as_str() {
+        "--to-ternary" => {
+            let number: i32 = args[1].parse().unwrap_or_else(|_| {
+                eprintln!("Invalid number: {}", args[1]);
+                process::exit(1);
+            });
+            println!("Ternary: {}", int_to_ternary(number));
+        }
+        "--to-decimal" => {
+            let ternary_str = args[1].replace(" ", "");
+            match parse_ternary(&ternary_str) {
+                Ok(num) => println!("Decimal: {}", num),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+        _ => {
+            eprintln!("Invalid option for convert. Use --to-ternary or --to-decimal.");
+            process::exit(1);
+        }
+    }
+}
+
+/* --- Checksum Utility --- */
+fn run_checksum(args: &[String]) {
+    if args.len() < 2 {
+        eprintln!("Usage: checksum --compute <ternary_string> OR --verify <ternary_string> <checksum>");
+        process::exit(1);
+    }
+    match args[0].as_str() {
+        "--compute" => {
+            let ternary_str = args[1..].join("");
+            let checksum = compute_checksum(&ternary_str);
+            println!("Computed checksum: {}", checksum);
+        }
+        "--verify" => {
+            if args.len() < 3 {
+                eprintln!("--verify requires a ternary string and a checksum value.");
+                process::exit(1);
+            }
+            let ternary_str = args[1..args.len()-1].join("");
+            let provided: u32 = args.last().unwrap().parse().unwrap_or_else(|_| {
+                eprintln!("Invalid checksum value.");
+                process::exit(1);
+            });
+            let computed = compute_checksum(&ternary_str);
+            if computed == provided {
+                println!("Checksum verified: {}", computed);
+            } else {
+                println!("Checksum mismatch: computed {} but provided {}", computed, provided);
+                process::exit(1);
+            }
+        }
+        _ => {
+            eprintln!("Invalid option for checksum. Use --compute or --verify.");
+            process::exit(1);
+        }
+    }
+}
+
+/// Computes a simple checksum: sum all digits (ignoring spaces) modulo 10.
+fn compute_checksum(s: &str) -> u32 {
+    s.chars()
+     .filter(|c| c.is_digit(10))
+     .map(|c| c.to_digit(10).unwrap())
+     .sum::<u32>() % 10
+}
+
+/*=====================================================================
+  Module 5: Ternary Arithmetic Evaluator and Helper Functions
+  ---------------------------------------------------------------------
+  This module implements the core arithmetic evaluator for ternary numbers.
+  It supports parsing, basic arithmetic operations, and conversion to/from
+  ternary strings.
+=====================================================================*/
+
+#[derive(Debug)]
+enum ParseError {
+    InvalidDigit(char),
+    UnexpectedChar(char),
+    MissingClosingParen,
+    DivisionByZero,
+    EmptyExpression,
+}
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            ParseError::InvalidDigit(c) => write!(f, "Invalid digit '{}': expected 0, 1, or 2", c),
+            ParseError::UnexpectedChar(c) => write!(f, "Unexpected character '{}'", c),
+            ParseError::MissingClosingParen => write!(f, "Missing closing parenthesis"),
+            ParseError::DivisionByZero => write!(f, "Division by zero"),
+            ParseError::EmptyExpression => write!(f, "Expression is empty"),
+        }
+    }
+}
+
+fn tritjs_eval_expression(expr: &str) -> Result<i32, ParseError> {
+    let expr = expr.trim();
+    if expr.is_empty() { return Err(ParseError::EmptyExpression); }
+    let chars: Vec<char> = expr.chars().collect();
+    let mut pos = 0;
+    let result = parse_expr(&chars, &mut pos)?;
+    while pos < chars.len() {
+        if !chars[pos].is_whitespace() { return Err(ParseError::UnexpectedChar(chars[pos])); }
+        pos += 1;
+    }
+    Ok(result)
+}
+
+fn parse_expr(chars: &[char], pos: &mut usize) -> Result<i32, ParseError> {
+    let mut value = parse_term(chars, pos)?;
+    while *pos < chars.len() {
+        skip_whitespace(chars, pos);
+        match chars.get(*pos) {
+            Some('+') => { *pos += 1; value += parse_term(chars, pos)?; },
+            Some('-') => { *pos += 1; value -= parse_term(chars, pos)?; },
+            _ => break,
+        }
+    }
+    Ok(value)
+}
+
+fn parse_term(chars: &[char], pos: &mut usize) -> Result<i32, ParseError> {
+    let mut value = parse_factor(chars, pos)?;
+    while *pos < chars.len() {
+        skip_whitespace(chars, pos);
+        match chars.get(*pos) {
+            Some('*') => { *pos += 1; value *= parse_factor(chars, pos)?; },
+            Some('/') => {
+                *pos += 1;
+                let next = parse_factor(chars, pos)?;
+                if next == 0 { return Err(ParseError::DivisionByZero); }
+                value /= next;
+            },
+            _ => break,
+        }
+    }
+    Ok(value)
+}
+
+fn parse_factor(chars: &[char], pos: &mut usize) -> Result<i32, ParseError> {
+    skip_whitespace(chars, pos);
+    if *pos >= chars.len() { return Err(ParseError::UnexpectedChar('\0')); }
+    if chars[*pos] == '(' {
+        *pos += 1;
+        let value = parse_expr(chars, pos)?;
+        skip_whitespace(chars, pos);
+        if *pos >= chars.len() || chars[*pos] != ')' { return Err(ParseError::MissingClosingParen); }
+        *pos += 1;
+        Ok(value)
+    } else { parse_number(chars, pos) }
+}
+
+fn parse_number(chars: &[char], pos: &mut usize) -> Result<i32, ParseError> {
+    skip_whitespace(chars, pos);
+    if *pos >= chars.len() { return Err(ParseError::UnexpectedChar('\0')); }
+    let mut value = 0;
+    let mut has_digits = false;
+    while *pos < chars.len() {
+        let c = chars[*pos];
+        if c >= '0' && c <= '2' {
+            value = value * 3 + (c as i32 - '0' as i32);
+            has_digits = true;
+            *pos += 1;
+        } else { break; }
+    }
+    if !has_digits { return Err(ParseError::InvalidDigit(chars[*pos])); }
+    Ok(value)
+}
+
+fn skip_whitespace(chars: &[char], pos: &mut usize) {
+    while *pos < chars.len() && chars[*pos].is_whitespace() { *pos += 1; }
+}
