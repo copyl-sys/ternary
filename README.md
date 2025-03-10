@@ -99,6 +99,9 @@ However, its adoption requires overcoming major infrastructure, compatibility, a
 
 Key Takeaways
 ✅ T81 is an AI-optimized, Base-81 ternary computing ecosystem spanning hardware, software, and machine learning.
+
 ✅ It introduces revolutionary advances in efficiency, security, and AI-driven automation.
+
 ✅ Its main challenges lie in hardware adoption, transition barriers, and industry resistance.
+
 ✅ With proper investment and infrastructure support, T81 could become the backbone of next-generation computing.
