@@ -1,0 +1,165 @@
+@* T81Lang Runtime Engine.
+
+This CWEB document implements the runtime system for T81Lang, including support for base-81 numerical types:
+`bigint81`, `float81`, and `frac81`. It features a parser and evaluator written in Python, using the trit-based
+arithmetic logic defined in `t81_core`. This implementation supports interactive scripting and arithmetic execution
+of base-81 expressions.
+
+@*1 Modules Used.
+We depend on the standard `re` module for parsing and define runtime classes for environment and evaluation.
+
+@<Import modules@>=
+import re
+from typing import Any, Dict, List, Tuple
+
+@<Import core T81 definitions@>=
+from t81_core import (
+    T81BigInt, T81Float, T81Fraction,
+    parse_trit_string,
+    tritjs_add_big, tritjs_subtract_big, tritjs_multiply_big,
+    t81float_multiply, t81float_divide,
+    t81_recursive_divide_big
+)
+
+@*1 Runtime Environment.
+The `RuntimeEnv` stores variables and provides accessors.
+
+@<Runtime environment class@>=
+class RuntimeEnv:
+    def __init__(self):
+        self.variables: Dict[str, Any] = {}
+
+    def set_var(self, name: str, value: Any):
+        self.variables[name] = value
+
+    def get_var(self, name: str) -> Any:
+        return self.variables.get(name)
+
+@*1 Reticulated Parser.
+Handles lines of T81Lang, variable assignment, printing, and base-81 operations.
+
+@<ReticulatedParser class@>=
+class ReticulatedParser:
+    def __init__(self, env: RuntimeEnv):
+        self.env = env
+
+    def parse_line(self, line: str):
+        line = line.strip()
+        if line.startswith("let"):
+            self._parse_let(line)
+        elif line.startswith("print"):
+            self._parse_print(line)
+
+@<Parse let statements@>=
+    def _parse_let(self, line: str):
+        match = re.match(r'let (\w+): (\w+) = "?([\d]+)"?(?:, (\d+))?', line)
+        if not match:
+            raise SyntaxError(f"Invalid let statement: {line}")
+
+        name, typ, val, exp = match.groups()
+        val_obj = None
+
+        if typ == "bigint81":
+            val_obj = parse_trit_string(val)
+        elif typ == "float81":
+            mantissa = parse_trit_string(val)
+            exponent = int(exp or 0)
+            val_obj = T81Float(mantissa, exponent)
+        elif typ == "frac81":
+            num = parse_trit_string(val)
+            denom = parse_trit_string(exp or '1')
+            val_obj = T81Fraction(num, denom)
+        else:
+            raise TypeError(f"Unknown type: {typ}")
+
+        self.env.set_var(name, val_obj)
+
+@<Parse print statements@>=
+    def _parse_print(self, line: str):
+        match = re.match(r'print\((.+)\)', line)
+        if not match:
+            raise SyntaxError(f"Invalid print statement: {line}")
+
+        expr = match.group(1).strip()
+        result = self._eval_expr(expr)
+        print(self._format_result(result))
+
+@<Evaluate expression@>=
+    def _eval_expr(self, expr: str) -> Any:
+        for op in ['+', '-', '*', '/']:
+            if op in expr:
+                a, b = map(str.strip, expr.split(op))
+                return self._binary_op(a, b, op)
+        return self.env.get_var(expr)
+
+@<Evaluate binary operations@>=
+    def _binary_op(self, a: str, b: str, op: str) -> Any:
+        A = self.env.get_var(a)
+        B = self.env.get_var(b)
+
+        if isinstance(A, T81BigInt) and isinstance(B, T81BigInt):
+            if op == '+': return tritjs_add_big(A, B)
+            elif op == '-': return tritjs_subtract_big(A, B)
+            elif op == '*': return tritjs_multiply_big(A, B)
+            elif op == '/': return t81_recursive_divide_big(A, B)[0]
+
+        elif isinstance(A, T81Float) and isinstance(B, T81Float):
+            if op == '*': return t81float_multiply(A, B)
+            elif op == '/': return t81float_divide(A, B)
+
+        elif isinstance(A, T81Fraction) and isinstance(B, T81Fraction):
+            if op == '+':
+                num = tritjs_add_big(
+                    tritjs_multiply_big(A.numerator, B.denominator),
+                    tritjs_multiply_big(B.numerator, A.denominator))
+                denom = tritjs_multiply_big(A.denominator, B.denominator)
+                return T81Fraction(num, denom)
+            elif op == '-':
+                num = tritjs_subtract_big(
+                    tritjs_multiply_big(A.numerator, B.denominator),
+                    tritjs_multiply_big(B.numerator, A.denominator))
+                denom = tritjs_multiply_big(A.denominator, B.denominator)
+                return T81Fraction(num, denom)
+            elif op == '*':
+                return T81Fraction(
+                    tritjs_multiply_big(A.numerator, B.numerator),
+                    tritjs_multiply_big(A.denominator, B.denominator))
+            elif op == '/':
+                return T81Fraction(
+                    tritjs_multiply_big(A.numerator, B.denominator),
+                    tritjs_multiply_big(A.denominator, B.numerator))
+
+        raise TypeError("Invalid operands for operation")
+
+@<Format result output@>=
+    def _format_result(self, value: Any) -> str:
+        return str(value)
+
+@*1 Runtime Entry.
+
+@<Script execution@>=
+def run_script(script: str):
+    env = RuntimeEnv()
+    parser = ReticulatedParser(env)
+    for line in script.strip().split('\n'):
+        if line and not line.strip().startswith('#'):
+            parser.parse_line(line)
+
+@<Main execution block@>=
+if __name__ == "__main__":
+    code = """
+    let a: bigint81 = "102"
+    let b: bigint81 = "21"
+    print(a + b)
+
+    let f1: float81 = "102", 0
+    let f2: float81 = "21", 0
+    print(f1 * f2)
+    print(f1 / f2)
+
+    let r1: frac81 = "7", 3
+    let r2: frac81 = "5", 9
+    print(r1 + r2)
+    print(r1 * r2)
+    """
+    run_script(code)
