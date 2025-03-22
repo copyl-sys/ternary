@@ -414,4 +414,16 @@ if __name__ == "__main__":
     let a: bigint81 = "102"      # 102 in base-81
     let b: bigint81 = "21"       # 21 in base-81
     print(a + b)                 # Should print 123
-    print(a + b...
+    print(a + b * b)             # Tests precedence: 102 + (21 * 21)
+
+    let f1: float81 = "102", 0   # 102 * 81^0
+    let f2: float81 = "21", 0    # 21 * 81^0
+    print(f1 * f2)               # Should print (mantissa) 2142, exponent: 0
+    print(f1 / f2)               # Should print approx. 4
+
+    let r1: frac81 = "7", 3      # 7/3 in base-81
+    let r2: frac81 = "5", 9      # 5/9 in base-81
+    print(r1 + r2)               # Should print 26/27
+    print(r1 * r2)               # Should print 35/27
+    """
+    run_script(code)
